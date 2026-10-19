@@ -22,3 +22,12 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+## Environment variables
+
+The app talks to its own Supabase project. Set these in `.env` locally and in Vercel (Project Settings → Environment Variables):
+
+```
+VITE_SUPABASE_URL=https://zpfulpkpfnfvcogzvwfk.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+```
