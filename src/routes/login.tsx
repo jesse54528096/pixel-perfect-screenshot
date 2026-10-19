@@ -1,28 +1,15 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "react-router";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
-
-export const Route = createFileRoute("/login")({
-  head: () => ({
-    meta: [
-      { title: "Sign in or sign up — Barberly" },
-      { name: "description", content: "Sign in to Barberly or create a customer or barber account." },
-      { property: "og:title", content: "Sign in or sign up — Barberly" },
-      { property: "og:description", content: "Sign in to Barberly or create a customer or barber account." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
-  component: LoginPage,
-});
+import { usePageMeta } from "@/lib/use-page-meta";
 
 type Role = "customer" | "shop";
 
-function LoginPage() {
+export function LoginPage({ mode }: { mode: "signin" | "signup" }) {
+  usePageMeta("Sign in or sign up — Barberly", "Sign in to Barberly or create a customer or barber account.");
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [role, setRole] = useState<Role>("customer");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,7 +31,7 @@ function LoginPage() {
       toast.error(error.message);
       return;
     }
-    navigate({ to: "/barbers" });
+    navigate("/app");
   }
 
   return (
@@ -96,9 +83,9 @@ function LoginPage() {
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             {mode === "signin" ? "New to Barberly?" : "Already have an account?"}{" "}
-            <button type="button" onClick={() => setMode(mode === "signin" ? "signup" : "signin")} className="font-medium text-foreground underline underline-offset-4">
+            <Link to={mode === "signin" ? "/sign-up" : "/sign-in"} replace className="font-medium text-foreground underline underline-offset-4">
               {mode === "signin" ? "Sign up" : "Sign in"}
-            </button>
+            </Link>
           </p>
         </div>
       </main>

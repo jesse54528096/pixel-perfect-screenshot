@@ -1,27 +1,14 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link } from "react-router";
 import { useState } from "react";
 import { BadgeCheck, CalendarCheck, Search, ShieldCheck, Star } from "lucide-react";
 import { Wordmark } from "@/components/Wordmark";
+import { usePageMeta } from "@/lib/use-page-meta";
 import heroLeft from "@/assets/hero-left.jpg";
 import heroRight from "@/assets/hero-right.jpg";
 import barber1 from "@/assets/barber-1.jpg";
 import barber2 from "@/assets/barber-2.jpg";
 import barber3 from "@/assets/barber-3.jpg";
 import barber4 from "@/assets/barber-4.jpg";
-
-export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "Barberly — Style with Confident Hair" },
-      { name: "description", content: "Find a great barber near you and book an appointment online in a few taps." },
-      { property: "og:title", content: "Barberly — Style with Confident Hair" },
-      { property: "og:description", content: "Find a great barber near you and book an appointment online in a few taps." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  }),
-  component: Index,
-});
 
 const FILTERS = ["All", "Cut", "Color", "Perm", "Beard"] as const;
 
@@ -47,7 +34,11 @@ const BARBERS = [
   { name: "Dario Russo", shop: "Traditional Barbering · Songshan", img: barber4, services: ["Cut", "Beard"], rating: 4.7, reviews: 146, from: 28 },
 ];
 
-function Index() {
+export function Index() {
+  usePageMeta(
+    "Barberly — Style with Confident Hair",
+    "Find a great barber near you and book an appointment online in a few taps.",
+  );
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
   const shown = filter === "All" ? BARBERS : BARBERS.filter((b) => b.services.includes(filter));
 
@@ -59,7 +50,7 @@ function Index() {
           <Search className="h-4 w-4 text-muted-foreground" />
           <input className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" placeholder="Search barbers" />
         </div>
-        <Link to="/login" className="ml-auto rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/85 md:ml-0">
+        <Link to="/sign-in" className="ml-auto rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/85 md:ml-0">
           Login
         </Link>
       </header>

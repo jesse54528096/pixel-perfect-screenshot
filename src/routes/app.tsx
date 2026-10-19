@@ -1,23 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
+import { usePageMeta } from "@/lib/use-page-meta";
+import { useAuthUser } from "./require-auth";
 
-export const Route = createFileRoute("/_authenticated/barbers")({
-  head: () => ({
-    meta: [
-      { title: "Barbers — Barberly" },
-      { name: "description", content: "Your Barberly home: barbers near you and your barber dashboard." },
-      { property: "og:title", content: "Barbers — Barberly" },
-      { property: "og:description", content: "Your Barberly home: barbers near you and your barber dashboard." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
-  component: BarbersPage,
-});
-
-function BarbersPage() {
-  const { user } = Route.useRouteContext();
+export function BarbersPage() {
+  usePageMeta("Barbers — Barberly", "Your Barberly home: barbers near you and your barber dashboard.");
+  const user = useAuthUser();
   const isShop = user.user_metadata?.["role"] === "shop";
 
   return (
