@@ -18,7 +18,7 @@ export const Route = createFileRoute("/_authenticated/barbers")({
 
 function BarbersPage() {
   const { user } = Route.useRouteContext();
-  const isShop = user.user_metadata?.role === "shop";
+  const isShop = user.user_metadata?.["role"] === "shop";
 
   return (
     <div className="min-h-screen bg-background">
