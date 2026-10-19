@@ -12,4 +12,8 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    // Pre-bundle these together so sonner always shares the same React copy.
+    optimizeDeps: { include: ["react", "react-dom", "sonner"] },
+  },
 });
