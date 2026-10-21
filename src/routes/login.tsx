@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,6 +14,10 @@ export function LoginPage({ mode }: { mode: "signin" | "signup" }) {
     "Sign in to Barberly or create a customer or barber account.",
   );
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  // Where to land after sign-in (e.g. back to the barber page the Book button came from).
+  const next = params.get("next");
+  const nextPath = next?.startsWith("/") && !next.startsWith("//") ? next : null;
   const [role, setRole] = useState<Role>("customer");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,7 +39,7 @@ export function LoginPage({ mode }: { mode: "signin" | "signup" }) {
       toast.error(error.message);
       return;
     }
-    navigate(await fetchHomePath());
+    navigate(mode === "signin" && nextPath ? nextPath : await fetchHomePath());
   }
 
   return (
@@ -110,7 +114,10 @@ export function LoginPage({ mode }: { mode: "signin" | "signup" }) {
           <p className="mt-6 text-center text-sm text-muted-foreground">
             {mode === "signin" ? "New to Barberly?" : "Already have an account?"}{" "}
             <Link
-              to={mode === "signin" ? "/sign-up" : "/sign-in"}
+              to={
+                (mode === "signin" ? "/sign-up" : "/sign-in") +
+                (nextPath ? `?next=${encodeURIComponent(nextPath)}` : "")
+              }
               replace
               className="font-medium text-foreground underline underline-offset-4"
             >

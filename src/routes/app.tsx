@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Navigate, useNavigate } from "react-router";
+import { Link, Navigate, useNavigate } from "react-router";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -57,11 +57,22 @@ export function BarbersPage() {
         <div className="animate-fade-up rounded-[2rem] bg-cream px-8 py-16 text-center">
           <h1 className="text-4xl font-semibold md:text-5xl">Barbers near you</h1>
           <p className="mx-auto mt-6 max-w-lg text-foreground/80">
-            附近的理髮師即將上線 — 下一個里程碑會加上瀏覽與預約功能。
+            瀏覽理髮師的作品、選服務和時段，馬上預約。
           </p>
-          <p className="mx-auto mt-3 max-w-lg text-sm text-muted-foreground">
-            Barbers near you are coming soon — browse &amp; booking arrive in the next milestone.
-          </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Link
+              to="/barbers"
+              className="rounded-full bg-primary px-6 py-2.5 font-medium text-primary-foreground transition hover:bg-primary/85"
+            >
+              找理髮師 / Browse barbers
+            </Link>
+            <Link
+              to="/bookings"
+              className="rounded-full border border-input px-6 py-2.5 font-medium transition hover:bg-muted"
+            >
+              我的預約 / My bookings
+            </Link>
+          </div>
         </div>
       </main>
     </div>

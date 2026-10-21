@@ -9,6 +9,9 @@ import { RoleHome } from "./routes/home";
 import { RequireShop } from "./routes/require-shop";
 import { ShopSetupPage } from "./routes/shop";
 import { ShopBookingsPage } from "./routes/shop-bookings";
+import { BarbersBrowsePage } from "./routes/barbers";
+import { BarberDetailPage } from "./routes/barber-detail";
+import { MyBookingsPage } from "./routes/my-bookings";
 
 export const routes: RouteObject[] = [
   {
@@ -20,12 +23,15 @@ export const routes: RouteObject[] = [
       { path: "/sign-up", element: <LoginPage mode="signup" /> },
       // Old URLs from the TanStack Start version.
       { path: "/login", element: <Navigate to="/sign-in" replace /> },
-      { path: "/barbers", element: <Navigate to="/app" replace /> },
+      // Public marketplace: browsing needs no account, booking does.
+      { path: "/barbers", element: <BarbersBrowsePage /> },
+      { path: "/barbers/:id", element: <BarberDetailPage /> },
       {
         element: <RequireAuth />,
         children: [
           { path: "/home", element: <RoleHome /> },
           { path: "/app", element: <BarbersPage /> },
+          { path: "/bookings", element: <MyBookingsPage /> },
           {
             element: <RequireShop />,
             children: [

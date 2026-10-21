@@ -6,10 +6,10 @@ import type { Tables } from "@/integrations/supabase/types";
 export type Profile = Tables<"profiles">;
 export type PlatformSettings = Tables<"platform_settings">;
 
-// Roles are read from profiles.role (never user_metadata). M1.1 routes only
-// shop and customer; admin is not a sign-in path yet.
+// Roles are read from profiles.role (never user_metadata). Shops land on their
+// setup page, everyone else on the barber browse page; admin is not a sign-in path yet.
 export function homePathFor(role: string | null | undefined) {
-  return role === "shop" ? "/shop" : "/app";
+  return role === "shop" ? "/shop" : "/barbers";
 }
 
 export async function fetchHomePath() {
