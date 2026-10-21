@@ -26,7 +26,7 @@ export function LoginPage({ mode }: { mode: "signin" | "signup" }) {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
-    const { error } =
+    const { data, error } =
       mode === "signup"
         ? await supabase.auth.signUp({
             email,
@@ -34,9 +34,16 @@ export function LoginPage({ mode }: { mode: "signin" | "signup" }) {
             options: { emailRedirectTo: `${window.location.origin}/home`, data: { role } },
           })
         : await supabase.auth.signInWithPassword({ email, password });
+    setBusy(false);
     if (error) {
-      setBusy(false);
       toast.error(error.message);
+      return;
+    }
+    // With email confirmation on, sign-up returns no session: the user signs in
+    // after clicking the link in the email.
+    if (!data.session) {
+      toast.success("請到信箱點確認連結，再回來登入 / Check your email to confirm your account.");
+      navigate("/sign-in");
       return;
     }
     navigate(mode === "signin" && nextPath ? nextPath : await fetchHomePath());

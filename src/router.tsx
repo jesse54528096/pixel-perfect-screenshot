@@ -19,8 +19,8 @@ export const routes: RouteObject[] = [
     errorElement: <RootErrorBoundary />,
     children: [
       { path: "/", element: <Index /> },
-      { path: "/sign-in", element: <LoginPage mode="signin" /> },
-      { path: "/sign-up", element: <LoginPage mode="signup" /> },
+      { path: "/sign-in", element: <LoginPage key="signin" mode="signin" /> },
+      { path: "/sign-up", element: <LoginPage key="signup" mode="signup" /> },
       // Old URLs from the TanStack Start version.
       { path: "/login", element: <Navigate to="/sign-in" replace /> },
       // Public marketplace: browsing needs no account, booking does.
