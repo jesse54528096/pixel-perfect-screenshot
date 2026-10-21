@@ -3,12 +3,16 @@ import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
+import { fetchHomePath } from "@/lib/profile";
 import { usePageMeta } from "@/lib/use-page-meta";
 
 type Role = "customer" | "shop";
 
 export function LoginPage({ mode }: { mode: "signin" | "signup" }) {
-  usePageMeta("Sign in or sign up — Barberly", "Sign in to Barberly or create a customer or barber account.");
+  usePageMeta(
+    "Sign in or sign up — Barberly",
+    "Sign in to Barberly or create a customer or barber account.",
+  );
   const navigate = useNavigate();
   const [role, setRole] = useState<Role>("customer");
   const [email, setEmail] = useState("");
@@ -23,15 +27,15 @@ export function LoginPage({ mode }: { mode: "signin" | "signup" }) {
         ? await supabase.auth.signUp({
             email,
             password,
-            options: { emailRedirectTo: window.location.origin, data: { role } },
+            options: { emailRedirectTo: `${window.location.origin}/home`, data: { role } },
           })
         : await supabase.auth.signInWithPassword({ email, password });
-    setBusy(false);
     if (error) {
+      setBusy(false);
       toast.error(error.message);
       return;
     }
-    navigate("/app");
+    navigate(await fetchHomePath());
   }
 
   return (
@@ -46,7 +50,11 @@ export function LoginPage({ mode }: { mode: "signin" | "signup" }) {
           </h1>
 
           {mode === "signup" && (
-            <div role="tablist" aria-label="Account type" className="mt-6 grid grid-cols-2 rounded-full bg-muted p-1">
+            <div
+              role="tablist"
+              aria-label="Account type"
+              className="mt-6 grid grid-cols-2 rounded-full bg-muted p-1"
+            >
               {(
                 [
                   ["customer", "Customer"],
@@ -70,20 +78,42 @@ export function LoginPage({ mode }: { mode: "signin" | "signup" }) {
           <form onSubmit={onSubmit} className="mt-6 space-y-4">
             <label className="block text-sm">
               <span className="font-medium">Email</span>
-              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-3 outline-none focus:border-ring" placeholder="you@example.com" />
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-3 outline-none focus:border-ring"
+                placeholder="you@example.com"
+              />
             </label>
             <label className="block text-sm">
               <span className="font-medium">Password</span>
-              <input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-3 outline-none focus:border-ring" placeholder="At least 6 characters" />
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-3 outline-none focus:border-ring"
+                placeholder="At least 6 characters"
+              />
             </label>
-            <button disabled={busy} className="w-full rounded-full bg-primary py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/85 disabled:opacity-60">
+            <button
+              disabled={busy}
+              className="w-full rounded-full bg-primary py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/85 disabled:opacity-60"
+            >
               {busy ? "Please wait…" : mode === "signin" ? "Sign In" : "Sign Up"}
             </button>
           </form>
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             {mode === "signin" ? "New to Barberly?" : "Already have an account?"}{" "}
-            <Link to={mode === "signin" ? "/sign-up" : "/sign-in"} replace className="font-medium text-foreground underline underline-offset-4">
+            <Link
+              to={mode === "signin" ? "/sign-up" : "/sign-in"}
+              replace
+              className="font-medium text-foreground underline underline-offset-4"
+            >
               {mode === "signin" ? "Sign up" : "Sign in"}
             </Link>
           </p>

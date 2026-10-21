@@ -5,6 +5,10 @@ import { RequireAuth } from "./routes/require-auth";
 import { Index } from "./routes/index";
 import { LoginPage } from "./routes/login";
 import { BarbersPage } from "./routes/app";
+import { RoleHome } from "./routes/home";
+import { RequireShop } from "./routes/require-shop";
+import { ShopSetupPage } from "./routes/shop";
+import { ShopBookingsPage } from "./routes/shop-bookings";
 
 export const routes: RouteObject[] = [
   {
@@ -19,7 +23,17 @@ export const routes: RouteObject[] = [
       { path: "/barbers", element: <Navigate to="/app" replace /> },
       {
         element: <RequireAuth />,
-        children: [{ path: "/app", element: <BarbersPage /> }],
+        children: [
+          { path: "/home", element: <RoleHome /> },
+          { path: "/app", element: <BarbersPage /> },
+          {
+            element: <RequireShop />,
+            children: [
+              { path: "/shop", element: <ShopSetupPage /> },
+              { path: "/shop/bookings", element: <ShopBookingsPage /> },
+            ],
+          },
+        ],
       },
       { path: "*", element: <NotFound /> },
     ],
