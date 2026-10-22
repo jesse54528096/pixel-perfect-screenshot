@@ -7,7 +7,8 @@ export type Profile = Tables<"profiles">;
 export type PlatformSettings = Tables<"platform_settings">;
 
 // Roles are read from profiles.role (never user_metadata). Shops land on their
-// setup page, everyone else on the barber browse page; admin is not a sign-in path yet.
+// setup page, everyone else on the barber browse page. Admin lands on /barbers too
+// until the payout page exists. TODO(M2.2): route admin to "/admin/payouts".
 export function homePathFor(role: string | null | undefined) {
   return role === "shop" ? "/shop" : "/barbers";
 }
