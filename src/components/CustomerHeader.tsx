@@ -23,7 +23,7 @@ export function CustomerHeader() {
             我的預約 / My bookings
           </NavLink>
         )}
-        {user && <ShopLink userId={user.id} />}
+        {user && <RoleLink userId={user.id} />}
       </nav>
       <div className="ml-auto flex items-center gap-3 text-sm">
         {user ? (
@@ -49,13 +49,22 @@ export function CustomerHeader() {
   );
 }
 
-// Shops browsing the marketplace keep a way back to their own pages.
-function ShopLink({ userId }: { userId: string }) {
+// Shops and admins browsing the marketplace keep a way back to their own pages.
+function RoleLink({ userId }: { userId: string }) {
   const { data: profile } = useProfile(userId);
-  if (profile?.role !== "shop") return null;
-  return (
-    <NavLink to="/shop" className={tab}>
-      我的店 / My shop
-    </NavLink>
-  );
+  if (profile?.role === "shop") {
+    return (
+      <NavLink to="/shop" className={tab}>
+        我的店 / My shop
+      </NavLink>
+    );
+  }
+  if (profile?.role === "admin") {
+    return (
+      <NavLink to="/admin/payouts" className={tab}>
+        撥款 / Payouts
+      </NavLink>
+    );
+  }
+  return null;
 }

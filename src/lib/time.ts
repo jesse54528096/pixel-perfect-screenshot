@@ -38,3 +38,14 @@ export function timeLabel(iso: string) {
 export function rangeLabel(startIso: string, endIso: string) {
   return `${dayLabel(startIso)} ${timeLabel(startIso)}–${timeLabel(endIso)}`;
 }
+
+const dateFormat = new Intl.DateTimeFormat("zh-TW", {
+  timeZone: DISPLAY_TZ,
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+});
+
+export function dateLabel(iso: string) {
+  return dateFormat.format(new Date(iso));
+}

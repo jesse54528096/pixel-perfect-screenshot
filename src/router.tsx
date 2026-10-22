@@ -13,6 +13,9 @@ import { BarbersBrowsePage } from "./routes/barbers";
 import { BarberDetailPage } from "./routes/barber-detail";
 import { MyBookingsPage } from "./routes/my-bookings";
 import { BookingSuccessPage } from "./routes/booking-success";
+import { RequireAdmin } from "./routes/require-admin";
+import { AdminPayoutsPage } from "./routes/admin-payouts";
+import { ShopEarningsPage } from "./routes/shop-earnings";
 
 export const routes: RouteObject[] = [
   {
@@ -39,7 +42,12 @@ export const routes: RouteObject[] = [
             children: [
               { path: "/shop", element: <ShopSetupPage /> },
               { path: "/shop/bookings", element: <ShopBookingsPage /> },
+              { path: "/shop/earnings", element: <ShopEarningsPage /> },
             ],
+          },
+          {
+            element: <RequireAdmin />,
+            children: [{ path: "/admin/payouts", element: <AdminPayoutsPage /> }],
           },
         ],
       },

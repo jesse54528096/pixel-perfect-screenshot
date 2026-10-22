@@ -17,6 +17,9 @@ export function ShopHeader({ email }: { email: string | undefined }) {
         <NavLink to="/shop/bookings" className={tab}>
           Services &amp; slots
         </NavLink>
+        <NavLink to="/shop/earnings" className={tab}>
+          收入 / Earnings
+        </NavLink>
       </nav>
       <div className="ml-auto flex items-center gap-3 text-sm">
         <span className="hidden sm:inline">Hi {email}</span>
