@@ -12,6 +12,7 @@ import { ShopBookingsPage } from "./routes/shop-bookings";
 import { BarbersBrowsePage } from "./routes/barbers";
 import { BarberDetailPage } from "./routes/barber-detail";
 import { MyBookingsPage } from "./routes/my-bookings";
+import { BookingSuccessPage } from "./routes/booking-success";
 
 export const routes: RouteObject[] = [
   {
@@ -32,6 +33,7 @@ export const routes: RouteObject[] = [
           { path: "/home", element: <RoleHome /> },
           { path: "/app", element: <BarbersPage /> },
           { path: "/bookings", element: <MyBookingsPage /> },
+          { path: "/bookings/success", element: <BookingSuccessPage /> },
           {
             element: <RequireShop />,
             children: [

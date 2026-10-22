@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { CATEGORY_LABELS, runFrom, sortPhotos, type Slot } from "@/lib/barbers";
+import { goToCheckout } from "@/lib/checkout";
 import { errMessage } from "@/lib/errors";
 import { formatMoney, usePlatformSettings } from "@/lib/profile";
 import { DISPLAY_TZ_LABEL, dayKey, dayLabel, rangeLabel, timeLabel } from "@/lib/time";
@@ -309,7 +310,7 @@ function PhotoCarousel({ photos, name }: { photos: Photo[]; name: string }) {
   );
 }
 
-// The booking pop-up: service -> date -> start slot -> confirm. Stays on the page.
+// The booking pop-up: service -> date -> start slot -> confirm, then off to Stripe Checkout.
 function BookDialog({
   barberName,
   services,
@@ -357,23 +358,32 @@ function BookDialog({
     setStartId(null);
   }
 
+  // Create the pending_payment booking (holds the slots), then pay on Stripe Checkout.
   async function confirm() {
     if (!service || !startId) return;
     setBusy(true);
-    const { error } = await supabase.rpc("create_booking", {
+    const { data: bookingId, error } = await supabase.rpc("create_booking", {
       p_service_id: service.id,
       p_start_slot_id: startId,
     });
-    setBusy(false);
     await queryClient.invalidateQueries({ queryKey: ["availability"] });
     if (error) {
+      setBusy(false);
       setStartId(null);
       toast.error(errMessage(error, "預約失敗，請再試一次 / Could not complete the booking."));
       return;
     }
     await queryClient.invalidateQueries({ queryKey: ["my-bookings"] });
-    onClose();
-    toast.success("預約已建立 / Booking created — 可到「我的預約」查看。");
+    try {
+      await goToCheckout(bookingId);
+    } catch (err) {
+      setBusy(false);
+      onClose();
+      toast.error(
+        errMessage(err, "無法前往付款 / Could not start checkout.") +
+          " 預約已保留，可到「我的預約」付款。",
+      );
+    }
   }
 
   return (
@@ -490,7 +500,7 @@ function BookDialog({
             disabled={busy || !service || !run}
             className={primaryButtonClass}
           >
-            {busy ? "預約中…" : "確認預約 / Confirm"}
+            {busy ? "前往付款中…" : "確認並付款 / Confirm & pay"}
           </button>
         </DialogFooter>
       </DialogContent>

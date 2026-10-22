@@ -5,7 +5,8 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { CustomerHeader } from "@/components/CustomerHeader";
-import { ghostButtonClass } from "@/components/ShopHeader";
+import { ghostButtonClass, primaryButtonClass } from "@/components/ShopHeader";
+import { goToCheckout } from "@/lib/checkout";
 import { errMessage } from "@/lib/errors";
 import { formatMoney, usePlatformSettings } from "@/lib/profile";
 import { DISPLAY_TZ_LABEL, rangeLabel } from "@/lib/time";
@@ -25,6 +26,7 @@ export function MyBookingsPage() {
   const queryClient = useQueryClient();
   const { data: settings } = usePlatformSettings();
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [paying, setPaying] = useState<string | null>(null);
   const queryKey = ["my-bookings", user.id];
 
   const { data: bookings = [], isPending } = useQuery({
@@ -54,6 +56,16 @@ export function MyBookingsPage() {
     toast.success("預約已取消 / Booking cancelled");
     await queryClient.invalidateQueries({ queryKey });
     await queryClient.invalidateQueries({ queryKey: ["availability"] });
+  }
+
+  async function pay(id: string) {
+    setPaying(id);
+    try {
+      await goToCheckout(id);
+    } catch (err) {
+      setPaying(null);
+      toast.error(errMessage(err, "無法前往付款 / Could not start checkout."));
+    }
   }
 
   return (
@@ -93,14 +105,24 @@ export function MyBookingsPage() {
                 </span>
               </p>
             </div>
-            {b.status !== "cancelled" && b.id && (
-              <button
-                onClick={() => cancel(b.id!)}
-                disabled={cancelling === b.id}
-                className={`${ghostButtonClass} text-destructive`}
-              >
-                {cancelling === b.id ? "取消中…" : "取消 / Cancel"}
-              </button>
+            {/* Paid bookings can't be cancelled here; refunds are handled by the platform. */}
+            {b.status === "pending_payment" && b.id && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => pay(b.id!)}
+                  disabled={paying === b.id}
+                  className={primaryButtonClass}
+                >
+                  {paying === b.id ? "前往付款中…" : "前往付款 / Pay"}
+                </button>
+                <button
+                  onClick={() => cancel(b.id!)}
+                  disabled={cancelling === b.id}
+                  className={`${ghostButtonClass} text-destructive`}
+                >
+                  {cancelling === b.id ? "取消中…" : "取消 / Cancel"}
+                </button>
+              </div>
             )}
           </div>
         ))}
