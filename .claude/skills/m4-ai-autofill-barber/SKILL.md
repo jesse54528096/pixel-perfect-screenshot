@@ -505,6 +505,7 @@ Implement this directly in the app repo (code-first). The spec, in the student's
 > - The「套用」writes go through the **existing M1.1 policies** (`shops_update_own` on `barbers`, `photos_write_own` on `barber_photos`). Do **not** add a server endpoint for saving, and do **not** add new RLS — the shop is only editing its own rows.
 > - Never call OpenAI from the browser and never reference `OPENAI_API_KEY` in `src/`. The browser only talks to `/api/ai/autofill`.
 > - Show the thumbnail with the same public-URL helper the photo uploader / carousel already uses.
+> - **Refresh the photo caption inputs after 套用.** If the photo manager renders captions as uncontrolled inputs (`defaultValue`), invalidating the query alone leaves the old text on screen. Key each photo on `id + caption` (e.g. `key={`${photo.id}:${photo.caption ?? ""}`}`) so the inputs remount with the saved caption.
 
 ---
 
