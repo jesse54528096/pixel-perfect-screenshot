@@ -28,16 +28,16 @@ The student invokes this directly (e.g. `驗收 M4`). You **actively run** each 
 
 ### Step 1: Collect (one message)
 
-Reuse the **live Vercel URL** from earlier milestones (Vercel MCP `get_project`) — don't ask for it again. Ask the student only for:
-1. The **barber's name** they tested with (the one with photos), and confirm they can sign in as the shop that owns it (they'll press the button twice: once 取消, once 套用).
+Don't ask the student for anything you can look up. Reuse the **live Vercel URL** from earlier milestones (Vercel MCP `get_project`), and pick the test barber yourself — the one with the most photos (query below). Tell the student up front that their only part is **one press**: sign in as that barber's shop, press「AI 自動填寫」, wait for the draft, tell you, then press「套用」when you say so.
 
 Then confirm the newest deployment is **READY** (Vercel MCP `list_deployments`) and note the test barber's id:
 ```sql
 select b.id, b.name, b.shop_id, b.intro,
        count(p.id) as photos, count(p.id) filter (where p.is_featured) as featured
 from public.barbers b left join public.barber_photos p on p.barber_id = b.id
-where b.name = '<barber name>'
-group by b.id;
+group by b.id
+order by photos desc
+limit 1;
 ```
 
 ### Step 2: Run the checklist
@@ -97,15 +97,17 @@ group by b.id;
   3. `barber.shop_id !== auth.user.id` → **`403`**.
   If your session can send a POST to the live URL (some sandboxes block it — a `000/403` from the proxy is not the app's answer), also prove it live: `POST /api/ai/autofill` with no token → expect `401`. A missing ownership check is a ❌ blocker. *Recovery:* M4 Step 3.
 
-- **B3 The draft has the right shape and only references known things.** As the **owning shop**, press「AI 自動填寫」. The dialog must show: an editable intro; one caption row per photo with a thumbnail; ref tags; and the "AI 參考了這些髮型範本" line. Then verify the server-side validation exists in the source: captions filtered to the barber's own photo ids, ref ids filtered to the retrieved set, intro trimmed and length-capped. Cross-check the ref names the dialog shows against `style_refs.name` — every tag must be a real reference name. *Recovery:* Step 7 of the function.
-
-- **B4 Nothing is written until「套用」.** Read before:
-  ```sql
-  select b.intro, json_agg(p.caption order by p.id) as captions
-  from public.barbers b join public.barber_photos p on p.barber_id = b.id
-  where b.id = '<test barber id>' group by b.id;
-  ```
-  The student presses「AI 自動填寫」, waits for the draft, then presses **「取消」**. Re-run the same query → **identical** result. ❌ if the intro or any caption changed (the API is writing on its own).
+- **B3 + B4 — one press: the draft is right, and nothing is written until「套用」.** This is the student's only action in the checklist.
+  1. You read the current state:
+     ```sql
+     select b.intro, json_agg(p.caption order by p.id) as captions
+     from public.barbers b join public.barber_photos p on p.barber_id = b.id
+     where b.id = '<test barber id>' group by b.id;
+     ```
+  2. The student (signed in as the owning shop) presses「AI 自動填寫」and tells you when the draft dialog is showing. Ask them to read you the ref tags (or send a screenshot).
+  3. **B3:** the dialog shows an editable intro, one caption row per photo with a thumbnail, ref tags, and the "AI 參考了這些髮型範本" line. Every ref tag must be a real `style_refs.name`. Also confirm in the source that the server filters captions to the barber's own photo ids, ref ids to the retrieved set, and caps the intro length. *Recovery:* Step 7 of the function.
+  4. **B4:** with the dialog still open, re-run the query from 1 → **identical** result. ❌ if the intro or any caption already changed (the API is writing on its own).
+  5. Now tell the student to press **「套用」** — that is D1.
 
 - **B5 Errors are generic to the browser, detailed in logs.** Check the function returns a generic message on failure (`AI 服務暫時無法使用…`) and logs the detail with `console.error` — it must never echo the OpenAI response body to the client. (Structural check in the source; optionally confirm a past error in `get_runtime_logs`.)
 
@@ -119,7 +121,7 @@ group by b.id;
 
 #### Section D — 套用 end-to-end
 
-- **D1 「套用」saves through RLS and shows publicly.** As the owning shop, press「AI 自動填寫」again, optionally edit a word, press **「套用」**. Re-run the B4 query → `intro` now equals the draft (with the edit) and the captions are filled. Then open `/barbers/<test barber id>` signed out → the new intro shows on the page (and captions wherever the carousel shows them). *Recovery:* M4 Step 4 (writes via the browser Supabase client; the M1.1 policies `shops_update_own` / `photos_write_own` must exist).
+- **D1 「套用」saves through RLS and is public.** After the student presses「套用」(B3 + B4 step 5), re-run the B4 query → `intro` now equals the draft (including any edit) and the captions are filled. Then confirm the public read path yourself: the `barbers` / `barber_photos` SELECT policies are `using (true)` (M1.1), so `/barbers/<id>` shows the new intro to anyone. Optionally ask the student to glance at that page. *Recovery:* M4 Step 4 (writes via the browser Supabase client; the M1.1 policies `shops_update_own` / `photos_write_own` must exist).
 
 - **D2 The write path is the shop's own session, not a new server endpoint.** Structural: the「套用」handler uses the browser Supabase client `update` on `barbers` and `barber_photos`; there is no `/api/…` route that writes `intro`/`caption`, and no new RLS policy was added for these tables in M4's migrations (`list_migrations` shows only `m4_style_refs` and `m4_style_refs_seed`).
 
@@ -136,7 +138,7 @@ Emit a table:
 | B1 deployed (GET → 405) | ✅ / ❌ | |
 | B2 401 no token / 403 another shop's barber (deployed source) | ✅ / ❌ | **the decisive test** — agent-run |
 | B3 draft shape + server-side validation of ids | ✅ / ❌ | |
-| B4 nothing written until 套用 | ✅ / ❌ | before = after on 取消 |
+| B4 nothing written until 套用 | ✅ / ❌ | unchanged while the draft is open |
 | B5 generic errors to the browser, details in logs | ✅ / ❌ | |
 | C1 `OPENAI_API_KEY` Sensitive, no `VITE_OPENAI…` | ✅ / ❌ | |
 | C2 key / OpenAI host not in the browser bundle | ✅ / ❌ | |
@@ -145,5 +147,5 @@ Emit a table:
 | D2 write path = shop session + M1.1 RLS (no new endpoint/policy) | ✅ / ❌ | |
 
 **Verdict:**
-- All ✅ (⚠️ allowed on A3) → 「M4 驗收通過 ✅ —— 髮型範本知識庫（pgvector）24 筆都有向量、相似度檢索找得到同類髮型；`/api/ai/autofill` 只讓擁有這位理髮師的店家使用（別人呼叫會被 403 擋下）、會在伺服器端檢查 AI 的輸出、而且只回傳草稿，按『取消』資料完全不變、按『套用』才用店家自己的權限存檔並出現在公開頁面；OpenAI 金鑰只在 Vercel 伺服器端，前端打包檔裡找不到。RAG 三步（向量化 → 檢索 → 生成）都做到了，整個課程完成 🎉」
+- All ✅ (⚠️ allowed on A3) → 「M4 驗收通過 ✅ —— 髮型範本知識庫（pgvector）24 筆都有向量、相似度檢索找得到同類髮型；`/api/ai/autofill` 只讓擁有這位理髮師的店家使用（別人呼叫會被 403 擋下）、會在伺服器端檢查 AI 的輸出、而且只回傳草稿，草稿顯示時資料完全不變、按『套用』才用店家自己的權限存檔並出現在公開頁面；OpenAI 金鑰只在 Vercel 伺服器端，前端打包檔裡找不到。RAG 三步（向量化 → 檢索 → 生成）都做到了，整個課程完成 🎉」
 - Any ❌ → list the failed items with their recovery step and tell the student to fix and re-run `驗收 M4`. Common failures: the function was never run successfully so nothing is embedded (A2 — usually the OpenAI key/quota/model), `match_style_refs` still executable by `authenticated` because only `anon` was revoked (A4), the ownership check is missing (B2), the API writes `intro` itself (B4), or the key was added as `VITE_OPENAI_API_KEY` (C1/C2).
