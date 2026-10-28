@@ -63,6 +63,8 @@ Tell the student (in their language):
 > 2. **Key** `OPENAI_MODEL`，**Value** 填一個**能看圖**的 GPT 模型名稱（例如 `gpt-4o-mini`；用課程統一的版本即可），Environments 同上。
 >
 > ⚠️ 名稱**不要**加 `VITE_` 開頭，金鑰也**不要**貼在這個對話裡。存好之後跟我說一聲。
+>
+> ⚠️ 金鑰的值一定是 **`sk-` 開頭**（通常是 `sk-proj-…`）。如果你貼到的是 `key_` 開頭的字串，那是金鑰的 ID，不是金鑰本身，呼叫會回 `401 invalid_api_key`。
 
 > **Note for Claude Code:** `OPENAI_MODEL` must be a chat model that accepts **image input** and supports **`response_format: { type: "json_schema", strict: true }`** (Structured Outputs). Embeddings always use `text-embedding-3-small` — that one is hard-coded in the function on purpose, because the database column is `vector(1536)` and the dimension must match.
 

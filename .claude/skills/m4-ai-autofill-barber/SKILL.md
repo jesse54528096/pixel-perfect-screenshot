@@ -518,7 +518,7 @@ Implement this directly in the app repo (code-first). The spec, in the student's
    ```sql
    select count(*) as refs, count(embedding) as embedded from public.style_refs;
    ```
-   Expect `embedded = refs` (24). If it's still 0, read the Vercel **runtime logs** for `/api/ai/autofill` (`get_runtime_logs`): the usual causes are `401 invalid_api_key` (wrong key), `429 insufficient_quota` (no billing on the OpenAI account), a model in `OPENAI_MODEL` that doesn't accept images or `json_schema`, or env vars added without a redeploy.
+   Expect `embedded = refs` (24). If it's still 0, read the Vercel **runtime logs** for `/api/ai/autofill` (`get_runtime_logs`): the usual causes are `401 invalid_api_key` (wrong key — e.g. a `key_…` key ID pasted instead of the `sk-…` secret; fix the value, then **Redeploy**), `429 insufficient_quota` (no billing on the OpenAI account), a model in `OPENAI_MODEL` that doesn't accept images or `json_schema`, or env vars added without a redeploy.
 5. **Retrieval sanity check** (now that vectors exist — compare one reference against the rest):
    ```sql
    select m.name, round(m.similarity::numeric, 3) as similarity
