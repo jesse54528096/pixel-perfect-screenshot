@@ -20,7 +20,7 @@ Verifies the student actually completed M4 — not just that a button exists. Th
 | C — Secret handling | **Vercel MCP** (env var names/types, deployment files) + URL-fetch MCP on the live bundle |
 | D — 套用 end-to-end | the live app + Supabase MCP |
 
-> **⚠️ The Supabase MCP runs as a privileged role and bypasses RLS**, so it can call the service-role-only `match_style_refs` and read every row. Use it for **structure and data** checks. The **behavioural** proofs (401/403, draft-only, 套用) are done in the **live app** — the student presses the button while you read the database before and after. The sandbox `curl` to the live URL is proxy-blocked (a `000/403` is not "down"); use the Vercel MCP / URL-fetch MCP.
+> **⚠️ The Supabase MCP runs as a privileged role and bypasses RLS**, so it can call the service-role-only `match_style_refs` and read every row. Use it for **structure and data** checks. The **behavioural** proofs (draft-only, 套用) are done in the **live app** — the student presses the button while you read the database before and after. The 401/403 guard (B2) is yours: verify it in the deployed source, no second account needed. The sandbox `curl` to the live URL is proxy-blocked (a `000/403` is not "down"); use the Vercel MCP / URL-fetch MCP.
 
 ## How to run
 
@@ -28,10 +28,8 @@ The student invokes this directly (e.g. `驗收 M4`). You **actively run** each 
 
 ### Step 1: Collect (one message)
 
-Ask the student for:
-1. The **live Vercel URL**.
-2. The **shop account** that owns the test barber, and the **barber's name** (the one with photos).
-3. A **second account** that is NOT that shop (another shop or a customer), for the 403 test.
+Reuse the **live Vercel URL** from earlier milestones (Vercel MCP `get_project`) — don't ask for it again. Ask the student only for:
+1. The **barber's name** they tested with (the one with photos), and confirm they can sign in as the shop that owns it (they'll press the button twice: once 取消, once 套用).
 
 Then confirm the newest deployment is **READY** (Vercel MCP `list_deployments`) and note the test barber's id:
 ```sql
@@ -91,18 +89,13 @@ group by b.id;
 
 #### Section B — `/api/ai/autofill` behaviour
 
-- **B1 Rejects a request with no token.** Use the URL-fetch MCP / browser to hit `GET <url>/api/ai/autofill` → expect **405** (the function is deployed and only accepts POST). Then confirm structurally in the deployed source (Vercel MCP deployment files, or the repo) that the handler returns **401** when the `Authorization` header is missing or invalid, **before** any OpenAI call.
+- **B1 The function is deployed.** Use the URL-fetch MCP to hit `GET <url>/api/ai/autofill` → expect **405** (deployed, POST only).
 
-- **B2 Rejects another shop's barber (403) — the decisive trust test.** Have the student, signed in as the **second account**, open the browser DevTools console on the live site and run:
-  ```js
-  const key = Object.keys(localStorage).find(k => k.endsWith('-auth-token'));
-  const token = JSON.parse(localStorage.getItem(key)).access_token;
-  const r = await fetch('/api/ai/autofill', { method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ barber_id: '<test barber id>' }) });
-  console.log(r.status, await r.json());
-  ```
-  Expect **`403 {"error":"not your barber"}`**. A 200 here is a ❌ blocker (anyone could run the AI on any barber and spend the platform's credit). *Recovery:* the `barber.shop_id !== user.id` check in the function (M4 Step 3).
+- **B2 Rejects another shop's barber (403) — the decisive trust test. You (the agent) do this, not the student.** The function uses the service role (bypasses RLS), so this check is the only thing stopping one shop from running the AI on another shop's barber. Read the **deployed** handler (Vercel MCP `get_deployment_file_contents`, or the repo at the deployed commit) and confirm, in this order, before any OpenAI call:
+  1. no / invalid `Authorization` token → `401`;
+  2. the barber is loaded by `barber_id` → `404` if missing;
+  3. `barber.shop_id !== auth.user.id` → **`403`**.
+  If your session can send a POST to the live URL (some sandboxes block it — a `000/403` from the proxy is not the app's answer), also prove it live: `POST /api/ai/autofill` with no token → expect `401`. A missing ownership check is a ❌ blocker. *Recovery:* M4 Step 3.
 
 - **B3 The draft has the right shape and only references known things.** As the **owning shop**, press「AI 自動填寫」. The dialog must show: an editable intro; one caption row per photo with a thumbnail; ref tags; and the "AI 參考了這些髮型範本" line. Then verify the server-side validation exists in the source: captions filtered to the barber's own photo ids, ref ids filtered to the retrieved set, intro trimmed and length-capped. Cross-check the ref names the dialog shows against `style_refs.name` — every tag must be a real reference name. *Recovery:* Step 7 of the function.
 
@@ -140,8 +133,8 @@ Emit a table:
 | A2 all references embedded | ✅ / ❌ | embedded = refs |
 | A3 retrieval sensible (self first, same-family neighbours) | ✅ / ⚠️ / ❌ | |
 | A4 RLS read-only for clients; `match_style_refs` service-role only; no advisor ERROR | ✅ / ❌ | |
-| B1 deployed; 401 without a token | ✅ / ❌ | |
-| B2 another shop's barber → 403 | ✅ / ❌ | **the decisive test** |
+| B1 deployed (GET → 405) | ✅ / ❌ | |
+| B2 401 no token / 403 another shop's barber (deployed source) | ✅ / ❌ | **the decisive test** — agent-run |
 | B3 draft shape + server-side validation of ids | ✅ / ❌ | |
 | B4 nothing written until 套用 | ✅ / ❌ | before = after on 取消 |
 | B5 generic errors to the browser, details in logs | ✅ / ❌ | |
