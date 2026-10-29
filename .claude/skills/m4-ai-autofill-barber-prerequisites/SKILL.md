@@ -1,6 +1,6 @@
 ---
 name: m4-ai-autofill-barber-prerequisites
-description: One-time setup before Milestone 4 (the egg unit「AI 自動填寫賣家商鋪資訊」) of the barber-booking course — an INTERACTIVE, agent-driven walkthrough with TWO parts. (A) The only NEW runtime wiring: the student creates an OpenAI API key and saves `OPENAI_API_KEY` (Sensitive, server-only, NEVER `VITE_`-prefixed) + `OPENAI_MODEL` (a vision-capable chat model) as Vercel env vars, then redeploys — the agent verifies the env var NAMES via the Vercel MCP but never sees the key. (B) A data-readiness carryover check of exactly what M4 consumes: at least one barber with portfolio photos in `barber_photos` (ideally some `is_featured = true`), the public `barber-photos` Storage bucket (so OpenAI can read the images by URL), the M1.1 RLS that lets a shop update its own `barbers.intro` + `barber_photos.caption` (the "套用" write path), `SUPABASE_SECRET_KEY` already in Vercel env from M2.1, the `pgvector` extension available, and a clean slate (no `style_refs` table / `match_style_refs` function yet — M4 creates them). Use when the student starts M4 for the first time, says "啟動 M4 前置" / "M4 prerequisites" / "check M4 setup", or when `m4-ai-autofill-barber` / `-checklist` detects a missing OpenAI env var, no photos, or no pgvector.
+description: One-time setup before Milestone 4 (the egg unit「AI 自動填寫賣家商鋪資訊」) of the barber-booking course — an INTERACTIVE, agent-driven walkthrough with TWO parts. (A) The only NEW runtime wiring: the student has already stored their OpenAI API key in AWS Secrets Manager as `openai-api-key` (us-east-1, done from the student step sheet before this skill runs); the agent verifies it exists and is an `sk-…` secret, then copies it into Vercel env as `OPENAI_API_KEY` (Sensitive, Production, server-only, NEVER `VITE_`-prefixed) and adds `OPENAI_MODEL` (a vision-capable chat model) via the Vercel MCP — never printing the value. (B) A data-readiness carryover check of exactly what M4 consumes: at least one barber with portfolio photos in `barber_photos` (ideally some `is_featured = true`), the public `barber-photos` Storage bucket (so OpenAI can read the images by URL), the M1.1 RLS that lets a shop update its own `barbers.intro` + `barber_photos.caption` (the "套用" write path), `SUPABASE_SECRET_KEY` already in Vercel env from M2.1, the `pgvector` extension available, and a clean slate (no `style_refs` table / `match_style_refs` function yet — M4 creates them). Use when the student starts M4 for the first time, says "啟動 M4 前置" / "M4 prerequisites" / "check M4 setup", or when `m4-ai-autofill-barber` / `-checklist` detects a missing OpenAI env var, no photos, or no pgvector.
 ---
 
 # M4 Prerequisites — interactive setup + carryover check (the agent drives)
@@ -11,7 +11,7 @@ description: One-time setup before Milestone 4 (the egg unit「AI 自動填寫�
 
 > **What's new in M4 = exactly one outside service: OpenAI.** M0–M2 already wired AWS + Supabase MCP + Vercel + the GitHub PAT (+ Stripe). M4 adds an **OpenAI API key** — used for three things in one function: GPT **looks at the photos**, OpenAI **embeddings** turn text into vectors, and GPT **writes** the intro/captions. One key covers all three. Everything else (the vector database) lives in the **same Supabase project** via the `pgvector` extension — no new database, no Edge Function, no new npm dependency.
 
-> ⚠️ **`OPENAI_API_KEY` is an app-runtime secret → Vercel env (Sensitive), NOT AWS Secrets Manager and NEVER `VITE_`.** Same bright line as `STRIPE_SECRET_KEY` in M2.1 ([[aws-secrets-best-practice]]): a `VITE_`-prefixed var is inlined into the browser bundle, so anyone could read the key and run up the student's OpenAI bill. The key is read only by the `/api/ai/autofill` serverless function. **Never ask the student to paste the key into the chat** — they paste it into the Vercel dashboard themselves; you only verify the variable *name* exists.
+> ⚠️ **Where the OpenAI key lives: AWS Secrets Manager is the source, Vercel env is the runtime copy, and it is NEVER `VITE_`.** Same pattern the student already used for their other credentials: they stored the key in **AWS Secrets Manager** as **`openai-api-key`** (us-east-1) from the step sheet, so you can reference it without asking again. The app itself runs on Vercel, so the serverless function reads it from **Vercel env `OPENAI_API_KEY`** (Sensitive). A `VITE_`-prefixed var is inlined into the browser bundle — anyone could read the key and run up the student's OpenAI bill. **Never print, echo or log the key value** — not in chat, not in a commit, not in a file.
 
 ## Architecture (what this check unlocks)
 
@@ -30,51 +30,49 @@ What this prereq confirms is exactly what that flow consumes:
 - `[[m4-ai-autofill-barber]]` (or its checklist) detects a missing `OPENAI_API_KEY`, no photos, or no `vector` extension.
 
 **Opening line to the student (say something like):**
-> 「M4 要做的是『AI 自動填寫』：店家按一個按鈕，AI 看這位理髮師的精選作品照，參考平台的髮型範本資料庫（這就是 RAG 向量資料庫），幫他寫好自我介紹和每張照片的說明，店家確認後才存檔。開始之前只有一件新的事要準備：一把 **OpenAI API 金鑰**，放進 Vercel 的環境變數。其他東西我先幫你檢查一下現在的狀態。」
+> 「M4 要做的是『AI 自動填寫』：店家按一個按鈕，AI 看這位理髮師的精選作品照，參考平台的髮型範本資料庫（這就是 RAG 向量資料庫），幫他寫好自我介紹和每張照片的說明，店家確認後才存檔。開始之前只有一件新的事：你已經把 **OpenAI API 金鑰**存進 AWS Secrets Manager 了，我會確認它在、然後幫你放進 Vercel 的環境變數。其他東西我也一起檢查現在的狀態。」
 
 ---
 
-## Part A — The OpenAI key + model in Vercel env (the only new setup)
+## Part A — The OpenAI key: AWS Secrets Manager → Vercel env (the only new setup)
 
-### A1 — Check what's already there (Vercel MCP, names only)
+### A1 — The key is in AWS Secrets Manager and is a real `sk-` secret
 
-Before asking the student to do anything, list the project's env var **names** with the Vercel MCP (`filter_project_envs` / `get_project` by project + team id — reuse the ids from earlier milestones). Look for:
+```
+call_aws secretsmanager describe-secret --secret-id openai-api-key --region us-east-1
+```
+- Found → note the ARN. Then read it **without printing it** (`get-secret-value`) and check only two things: the value starts with **`sk-`** (usually `sk-proj-…`), and it is a bare string (or a JSON with one obvious key field — accept either, like the GitHub PAT).
+- **Not found** → the student skipped the step sheet's「Set Up OpenAI Credential」part. Tell them (in their language) to go back to that part: top up billing (≥ US$5), create the key, and ask you to store it as `openai-api-key`. Then re-run A1.
+- **Value starts with `key_`** (or anything other than `sk-`) → that's the key's **ID**, not the secret, and every call would fail with `401 invalid_api_key`. Ask the student to create a new key, copy the `sk-…` string shown once, and ask you to **update** `openai-api-key` with it.
 
-| Variable | Needed | Where it came from |
+> **Note for Claude Code:** the secret name/region can drift between installs (the course has seen this with the GitHub PAT). If `openai-api-key` isn't in us-east-1, `list-secrets` and match by name (`openai`), then use what you find.
+
+### A2 — Copy it into Vercel env + add the model name (Vercel MCP)
+
+First list the project's env var **names** (`filter_project_envs`, project + team id from earlier milestones — never decrypt):
+
+| Variable | Needed | Where it comes from |
 |---|---|---|
 | `SUPABASE_SECRET_KEY` | ✅ | M2.1 prerequisite A6 |
-| `OPENAI_API_KEY` | ✅ | **this step** |
-| `OPENAI_MODEL` | ✅ | **this step** |
+| `OPENAI_API_KEY` | ✅ | **this step** — the value of `openai-api-key` |
+| `OPENAI_MODEL` | ✅ | **this step** — default `gpt-4o-mini` |
 
-- `SUPABASE_SECRET_KEY` **missing** → blocker: send the student to the M2.1 prerequisite A6 (the service-role key), then come back.
-- No variable named **`VITE_OPENAI…`** may exist. If one does, have the student **delete it** in the dashboard first — it would ship the key to every browser.
-- If `OPENAI_API_KEY` and `OPENAI_MODEL` already exist (a partial earlier run), skip to A3.
+- `SUPABASE_SECRET_KEY` **missing** → blocker: send the student to the M2.1 prerequisite A6, then come back.
+- Any **`VITE_OPENAI…`** variable → remove it first (it would ship the key to every browser).
+- Create **`OPENAI_API_KEY`** with the value from A1: type **sensitive**, target **production** (`create_project_env`). If it already exists, overwrite it with the A1 value (`edit_project_env`) so Vercel and AWS stay in sync.
+- Create **`OPENAI_MODEL`** = `gpt-4o-mini` (or the course's chosen model), target **production**.
 
-> **Note for Claude Code:** only read env var **names / types / targets**. Never decrypt or print a value. If the Vercel MCP can't list env vars in this session, ask the student to confirm the names from the dashboard instead.
-
-### A2 — The student creates the key and saves both variables
-
-Tell the student (in their language):
-
-> **在 OpenAI 拿 API key：** 到 **platform.openai.com → 右上角頭像 → API keys → Create new secret key**，名稱可以填 `barber-m4`，建立後**複製 `sk-...` 這串**（只會顯示一次）。帳號要有可用額度（Billing 裡有餘額或已綁卡），否則呼叫會回 `429 insufficient_quota`。
+> **Note for Claude Code:** `OPENAI_MODEL` must be a chat model that accepts **image input** and supports **`response_format: { type: "json_schema", strict: true }`** (Structured Outputs). Embeddings always use `text-embedding-3-small` — hard-coded in the function on purpose, because the database column is `vector(1536)` and the dimension must match.
 >
-> **放進 Vercel：** Vercel → 你的專案 → **Settings → Environment Variables** → 新增兩個：
-> 1. **Key** `OPENAI_API_KEY`，**Value** 貼上 `sk-...`，勾選 **Sensitive**，Environments 至少勾 **Production**。
-> 2. **Key** `OPENAI_MODEL`，**Value** 填一個**能看圖**的 GPT 模型名稱（例如 `gpt-4o-mini`；用課程統一的版本即可），Environments 同上。
->
-> ⚠️ 名稱**不要**加 `VITE_` 開頭，金鑰也**不要**貼在這個對話裡。存好之後跟我說一聲。
->
-> ⚠️ 金鑰的值一定是 **`sk-` 開頭**（通常是 `sk-proj-…`）。如果你貼到的是 `key_` 開頭的字串，那是金鑰的 ID，不是金鑰本身，呼叫會回 `401 invalid_api_key`。
+> If your session's Vercel MCP can't create env vars, fall back to the dashboard: tell the student to add the two variables in **Vercel → Settings → Environment Variables** (key marked **Sensitive**, Production), pasting the same `sk-…` they stored in AWS, then confirm back.
 
-> **Note for Claude Code:** `OPENAI_MODEL` must be a chat model that accepts **image input** and supports **`response_format: { type: "json_schema", strict: true }`** (Structured Outputs). Embeddings always use `text-embedding-3-small` — that one is hard-coded in the function on purpose, because the database column is `vector(1536)` and the dimension must match.
+### A3 — Verify the names landed
 
-### A3 — Verify the names landed + redeploy
+Re-list the env var names. `OPENAI_API_KEY` (**sensitive**, production) and `OPENAI_MODEL` present, no `VITE_OPENAI…` → ✅.
 
-Re-list the env var names (A1). Both `OPENAI_API_KEY` and `OPENAI_MODEL` present, **Sensitive / encrypted** type on the key, Production target → ✅.
+Env vars only reach a function **after a new deployment**. M4's build pushes code (which redeploys), so no manual redeploy is needed now — but if the key ever changes later, update **both** the AWS secret and the Vercel variable, then **Redeploy**.
 
-Env vars only reach a function **after a new deployment**. M4's build will push code (which redeploys anyway), so a manual redeploy is optional here — but tell the student that if they ever change the key later, they must **Redeploy** for it to take effect.
-
-**Tell the student:** "✅ OpenAI 金鑰和模型名稱都放進 Vercel 了（金鑰是 Sensitive、只在伺服器端讀得到），這是 M4 唯一需要的新設定。"
+**Tell the student:** 「✅ 你的 OpenAI 金鑰在 AWS Secrets Manager（`openai-api-key`），我也把它放進 Vercel 的 `OPENAI_API_KEY`（Sensitive，只有伺服器讀得到），模型設成 `gpt-4o-mini`。這是 M4 唯一需要的新設定。」
 
 ---
 
@@ -161,7 +159,7 @@ select to_regclass('public.style_refs')      as style_refs,
 
 ## Verify (all must pass)
 
-- ✅ **OpenAI wired** — `OPENAI_API_KEY` (Sensitive) + `OPENAI_MODEL` exist in Vercel env, no `VITE_OPENAI…` variable exists, and `SUPABASE_SECRET_KEY` is still there (Part A).
+- ✅ **OpenAI wired** — `openai-api-key` exists in AWS Secrets Manager and is an `sk-…` secret; `OPENAI_API_KEY` (Sensitive) + `OPENAI_MODEL` exist in Vercel env; no `VITE_OPENAI…` variable; `SUPABASE_SECRET_KEY` is still there (Part A).
 - ✅ **Photos to look at** — at least one barber has ≥ 1 photo (ideally 2–6 featured) (B1).
 - ✅ **Public bucket** — `barber-photos` is public (B2).
 - ✅ **Write path** — M1.1's shop UPDATE policies on `barbers` + `barber_photos` exist, and `intro` / `caption` / `is_featured` / `storage_path` columns are there (B3).
@@ -170,7 +168,7 @@ select to_regclass('public.style_refs')      as style_refs,
 ## Next step
 
 When all five are ✅, tell the student:
-「前置檢查通過 ✅ —— OpenAI 金鑰和模型已經放進 Vercel（只在伺服器端讀得到）；`<理髮師名稱>` 有 N 張作品照（其中 M 張精選）可以給 AI 看；照片 bucket 是公開的，OpenAI 讀得到；店家本來就能改自己理髮師的介紹和照片說明，所以『套用』不用新增權限；Supabase 也可以啟用 pgvector。接下來我會：建一張**髮型範本知識庫**（pgvector 向量表）並放進 24 種常見髮型、寫一支伺服器端的 `/api/ai/autofill`（看圖 → 轉向量 → 找相似範本 → 寫草稿），再在 `/shop` 加上『AI 自動填寫』按鈕和草稿對話框。跟我說『啟動 M4』就開始。」
+「前置檢查通過 ✅ —— OpenAI 金鑰在 AWS Secrets Manager，也已經放進 Vercel（只在伺服器端讀得到）；`<理髮師名稱>` 有 N 張作品照（其中 M 張精選）可以給 AI 看；照片 bucket 是公開的，OpenAI 讀得到；店家本來就能改自己理髮師的介紹和照片說明，所以『套用』不用新增權限；Supabase 也可以啟用 pgvector。接下來我會：建一張**髮型範本知識庫**（pgvector 向量表）並放進 24 種常見髮型、寫一支伺服器端的 `/api/ai/autofill`（看圖 → 轉向量 → 找相似範本 → 寫草稿），再在 `/shop` 加上『AI 自動填寫』按鈕和草稿對話框。跟我說『啟動 M4』就開始。」
 Then return to the build skill `[[m4-ai-autofill-barber]]` (Step 0/1).
 
 ## Reference
