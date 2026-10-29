@@ -4,7 +4,6 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
-import { AiAutofill } from "@/components/AiAutofill";
 import { PhotoManager, PHOTO_BUCKET } from "@/components/PhotoManager";
 import {
   ShopHeader,
@@ -206,7 +205,6 @@ function BarberCard({ barber }: { barber: Barber }) {
           </button>
         </div>
       )}
-      <AiAutofill barberId={barber.id} />
       <PhotoManager barberId={barber.id} />
     </div>
   );

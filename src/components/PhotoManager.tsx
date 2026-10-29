@@ -119,12 +119,7 @@ export function PhotoManager({ barberId }: { barberId: string }) {
       ) : (
         <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
           {photos.map((photo, i) => (
-            // Caption inputs are uncontrolled; keying on the caption refreshes them after
-            // an outside update (e.g. the AI draft being applied).
-            <figure
-              key={`${photo.id}:${photo.caption ?? ""}`}
-              className="overflow-hidden rounded-2xl border border-border"
-            >
+            <figure key={photo.id} className="overflow-hidden rounded-2xl border border-border">
               <img
                 src={photoUrl(photo.storage_path)}
                 alt={photo.caption ?? "Sample hairstyle"}
