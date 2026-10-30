@@ -173,11 +173,14 @@ function BarberCard({ barber }: { barber: Barber }) {
   const { data: photos = [] } = useBarberPhotos(barber.id);
   const [drafting, setDrafting] = useState(false);
   const [draft, setDraft] = useState<AutofillDraft | null>(null);
+  // Photos ticked for AI (top-right checkbox); dropped ids (deleted photos) are ignored.
+  const [aiSelected, setAiSelected] = useState<Set<string>>(() => new Set());
+  const aiPhotoIds = photos.filter((p) => aiSelected.has(p.id)).map((p) => p.id);
 
   async function autofill() {
     setDrafting(true);
     try {
-      setDraft(await requestAutofill(barber.id));
+      setDraft(await requestAutofill(barber.id, aiPhotoIds));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
@@ -215,8 +218,10 @@ function BarberCard({ barber }: { barber: Barber }) {
           </div>
           <button
             onClick={autofill}
-            disabled={drafting || photos.length === 0}
-            title={photos.length === 0 ? "先上傳作品照，AI 才能幫你寫" : undefined}
+            disabled={drafting || aiPhotoIds.length === 0}
+            title={
+              aiPhotoIds.length === 0 ? "先勾選照片右上角的 AI，AI 才知道要寫哪幾張" : undefined
+            }
             className={ghostButtonClass}
           >
             {drafting ? "AI 撰寫中…" : "AI 自動填寫"}
@@ -227,14 +232,20 @@ function BarberCard({ barber }: { barber: Barber }) {
           <button onClick={remove} className={`${ghostButtonClass} text-destructive`}>
             刪除 / Delete
           </button>
-          {photos.length === 0 && (
-            <p className="basis-full text-right text-xs text-muted-foreground">
-              先上傳作品照，AI 才能幫你寫
-            </p>
-          )}
+          <p className="basis-full text-right text-xs text-muted-foreground">
+            {photos.length === 0
+              ? "先上傳作品照，AI 才能幫你寫"
+              : aiPhotoIds.length === 0
+                ? "勾選照片右上角的 AI，再按「AI 自動填寫」"
+                : `AI 會為勾選的 ${aiPhotoIds.length} 張照片撰寫說明`}
+          </p>
         </div>
       )}
-      <PhotoManager barberId={barber.id} />
+      <PhotoManager
+        barberId={barber.id}
+        aiSelected={aiSelected}
+        onAiSelectedChange={setAiSelected}
+      />
       {draft && (
         <AutofillDialog
           barber={barber}

@@ -32,12 +32,30 @@ export function useBarberPhotos(barberId: string) {
 
 // Sample hairstyle photos for one barber. Files live at <barber_id>/<uuid>.<ext>
 // in the public bucket; the Storage policy only lets the owning shop write there.
-export function PhotoManager({ barberId }: { barberId: string }) {
+// The top-right checkbox picks photos for AI 自動填寫 (kept in the parent, not saved);
+// 精選 / Featured only controls the public carousel order.
+export function PhotoManager({
+  barberId,
+  aiSelected,
+  onAiSelectedChange,
+}: {
+  barberId: string;
+  aiSelected: Set<string>;
+  onAiSelectedChange: (next: Set<string>) => void;
+}) {
   const queryClient = useQueryClient();
   const queryKey = ["barber_photos", barberId];
   const [uploading, setUploading] = useState(false);
   const { data: photos = [] } = useBarberPhotos(barberId);
   const refresh = () => queryClient.invalidateQueries({ queryKey });
+  const allSelected = photos.length > 0 && photos.every((p) => aiSelected.has(p.id));
+
+  function toggleAi(id: string, checked: boolean) {
+    const next = new Set(aiSelected);
+    if (checked) next.add(id);
+    else next.delete(id);
+    onAiSelectedChange(next);
+  }
 
   async function onFiles(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -106,7 +124,17 @@ export function PhotoManager({ barberId }: { barberId: string }) {
     <div className="mt-6">
       <div className="flex flex-wrap items-center gap-3">
         <h4 className="font-medium">作品照 / Sample hairstyle photos</h4>
-        <label className={`ml-auto cursor-pointer ${ghostButtonClass}`}>
+        <button
+          type="button"
+          disabled={photos.length === 0}
+          onClick={() =>
+            onAiSelectedChange(allSelected ? new Set() : new Set(photos.map((p) => p.id)))
+          }
+          className={`ml-auto ${ghostButtonClass}`}
+        >
+          {allSelected ? "取消全選 / Clear" : "全部選取 / Select all"}
+        </button>
+        <label className={`cursor-pointer ${ghostButtonClass}`}>
           {uploading ? "Uploading…" : "+ 上傳 / Upload"}
           <input
             type="file"
@@ -126,8 +154,17 @@ export function PhotoManager({ barberId }: { barberId: string }) {
             <figure
               // Captions are uncontrolled inputs: remount when an AI draft is applied.
               key={`${photo.id}:${photo.caption ?? ""}`}
-              className="overflow-hidden rounded-2xl border border-border"
+              className="relative overflow-hidden rounded-2xl border border-border"
             >
+              <label className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-background/90 px-2 py-1 text-xs font-medium shadow-soft">
+                <input
+                  type="checkbox"
+                  checked={aiSelected.has(photo.id)}
+                  onChange={(e) => toggleAi(photo.id, e.target.checked)}
+                  aria-label="讓 AI 撰寫這張照片的說明"
+                />
+                AI
+              </label>
               <img
                 src={photoUrl(photo.storage_path)}
                 alt={photo.caption ?? "Sample hairstyle"}

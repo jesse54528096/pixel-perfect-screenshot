@@ -6,11 +6,10 @@ import { chatJson, embed } from "../_openai.js";
 // Two model calls + embeddings can take a while; the default timeout may be too short.
 export const config = { maxDuration: 60 };
 
-const MAX_PHOTOS = 6;
 const REFS_PER_PHOTO = 3;
 const MAX_REFS = 8;
 
-type Photo = { id: string; storage_path: string; is_featured: boolean };
+type Photo = { id: string; storage_path: string };
 type Ref = { id: string; name: string; category: string; description: string; similarity: number };
 
 // Photos may contain text (signs, captions, watermarks). It is data, never instructions.
@@ -104,8 +103,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { data: auth, error: authError } = await supabaseAdmin.auth.getUser(token);
   if (authError || !auth.user) return res.status(401).json({ error: "not signed in" });
 
-  const barberId = (req.body as { barber_id?: unknown } | undefined)?.barber_id;
+  const body = req.body as { barber_id?: unknown; photo_ids?: unknown } | undefined;
+  const barberId = body?.barber_id;
   if (typeof barberId !== "string") return res.status(400).json({ error: "barber_id required" });
+  const requested = Array.isArray(body?.photo_ids)
+    ? body.photo_ids.filter((id): id is string => typeof id === "string")
+    : [];
+  if (requested.length === 0) return res.status(400).json({ error: "請先勾選要讓 AI 撰寫的照片" });
 
   const { data: barber, error: barberError } = await supabaseAdmin
     .from("barbers")
@@ -116,17 +120,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!barber) return res.status(404).json({ error: "barber not found" });
   if (barber.shop_id !== auth.user.id) return res.status(403).json({ error: "not your barber" });
 
-  // 2. Featured photos first; with none featured, the newest ones.
+  // 2. Exactly the photos the shop ticked for AI, and only ones that belong to this barber.
   const { data: photoRows, error: photoError } = await supabaseAdmin
     .from("barber_photos")
-    .select("id, storage_path, is_featured")
+    .select("id, storage_path")
     .eq("barber_id", barberId)
-    .order("created_at", { ascending: false });
+    .in("id", requested)
+    .order("sort_order")
+    .order("created_at");
   if (photoError) return res.status(500).json({ error: "could not load photos" });
-  const all = (photoRows ?? []) as Photo[];
-  const featured = all.filter((p) => p.is_featured);
-  const photos = (featured.length > 0 ? featured : all).slice(0, MAX_PHOTOS);
-  if (photos.length === 0) return res.status(400).json({ error: "請先上傳作品照" });
+  const photos = (photoRows ?? []) as Photo[];
+  if (photos.length === 0) return res.status(400).json({ error: "請先勾選要讓 AI 撰寫的照片" });
   const photoIds = new Set(photos.map((p) => p.id));
 
   try {
