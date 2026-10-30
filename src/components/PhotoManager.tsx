@@ -32,7 +32,7 @@ export function useBarberPhotos(barberId: string) {
 
 // Sample hairstyle photos for one barber. Files live at <barber_id>/<uuid>.<ext>
 // in the public bucket; the Storage policy only lets the owning shop write there.
-// The top-right checkbox picks photos for AI 自動填寫 (kept in the parent, not saved);
+// The AI checkbox (next to 精選) picks photos for AI 自動填寫 (kept in the parent, not saved);
 // 精選 / Featured only controls the public carousel order.
 export function PhotoManager({
   barberId,
@@ -154,17 +154,8 @@ export function PhotoManager({
             <figure
               // Captions are uncontrolled inputs: remount when an AI draft is applied.
               key={`${photo.id}:${photo.caption ?? ""}`}
-              className="relative overflow-hidden rounded-2xl border border-border"
+              className="overflow-hidden rounded-2xl border border-border"
             >
-              <label className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-background/90 px-2 py-1 text-xs font-medium shadow-soft">
-                <input
-                  type="checkbox"
-                  checked={aiSelected.has(photo.id)}
-                  onChange={(e) => toggleAi(photo.id, e.target.checked)}
-                  aria-label="讓 AI 撰寫這張照片的說明"
-                />
-                AI
-              </label>
               <img
                 src={photoUrl(photo.storage_path)}
                 alt={photo.caption ?? "Sample hairstyle"}
@@ -180,14 +171,25 @@ export function PhotoManager({
                   placeholder="說明 / caption"
                   className="w-full rounded-lg border border-input bg-background px-2 py-1"
                 />
-                <label className="flex items-center gap-1.5">
-                  <input
-                    type="checkbox"
-                    checked={photo.is_featured}
-                    onChange={(e) => update(photo, { is_featured: e.target.checked })}
-                  />
-                  精選 / Featured
-                </label>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={photo.is_featured}
+                      onChange={(e) => update(photo, { is_featured: e.target.checked })}
+                    />
+                    精選 / Featured
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={aiSelected.has(photo.id)}
+                      onChange={(e) => toggleAi(photo.id, e.target.checked)}
+                      aria-label="讓 AI 撰寫這張照片的說明"
+                    />
+                    AI
+                  </label>
+                </div>
                 <div className="flex gap-1">
                   <button
                     onClick={() => move(i, -1)}

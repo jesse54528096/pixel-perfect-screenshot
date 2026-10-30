@@ -95,7 +95,7 @@ group by b.id
 order by photos desc;
 ```
 - **At least one barber with `photos >= 1`** → ✅ there's something for the AI to look at. Note that barber (you'll test with them).
-- `featured` is informational only. 精選 / Featured still just orders the public carousel; the AI reads the photos the student ticks with the「AI」checkbox in each photo's top-right corner (or「全部選取」) right before pressing the button, with no count limit.
+- `featured` is informational only. 精選 / Featured still just orders the public carousel; the AI reads the photos the student ticks with the「AI」checkbox next to 精選 / Featured under each photo (or「全部選取」) right before pressing the button, with no count limit.
 - **No photos anywhere** → have the student upload **3–6 real hairstyle photos** for one barber on `/shop` (M1.1's uploader) then re-run B1. Without photos the「AI 自動填寫」button stays disabled.
 
 > **Note for Claude Code:** good test photos are clear shots of a haircut (side/back views, a fade, a perm, a beard). Random non-hair images will still produce a draft, but the retrieval demo (A3 in the checklist) is much more convincing with real hairstyles.
@@ -168,7 +168,7 @@ select to_regclass('public.style_refs')      as style_refs,
 ## Next step
 
 When all five are ✅, tell the student:
-「前置檢查通過 ✅ —— OpenAI 金鑰在 AWS Secrets Manager，也已經放進 Vercel（只在伺服器端讀得到）；`<理髮師名稱>` 有 N 張作品照，按按鈕前勾選照片右上角的「AI」就能決定要讓 AI 看哪幾張；照片 bucket 是公開的，頁面上看得到照片；店家本來就能改自己理髮師的介紹和照片說明，所以『套用』不用新增權限；Supabase 也可以啟用 pgvector。接下來我會：建一張**髮型範本知識庫**（pgvector 向量表）並放進 24 種常見髮型、寫一支伺服器端的 `/api/ai/autofill`（看圖 → 轉向量 → 找相似範本 → 寫草稿），再在 `/shop` 加上『AI 自動填寫』按鈕和草稿對話框。跟我說『啟動 M4』就開始。」
+「前置檢查通過 ✅ —— OpenAI 金鑰在 AWS Secrets Manager，也已經放進 Vercel（只在伺服器端讀得到）；`<理髮師名稱>` 有 N 張作品照，按按鈕前勾選照片「精選」旁邊的「AI」就能決定要讓 AI 看哪幾張；照片 bucket 是公開的，頁面上看得到照片；店家本來就能改自己理髮師的介紹和照片說明，所以『套用』不用新增權限；Supabase 也可以啟用 pgvector。接下來我會：建一張**髮型範本知識庫**（pgvector 向量表）並放進 24 種常見髮型、寫一支伺服器端的 `/api/ai/autofill`（看圖 → 轉向量 → 找相似範本 → 寫草稿），再在 `/shop` 加上『AI 自動填寫』按鈕和草稿對話框。跟我說『啟動 M4』就開始。」
 Then return to the build skill `[[m4-ai-autofill-barber]]` (Step 0/1).
 
 ## Reference
