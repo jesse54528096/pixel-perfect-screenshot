@@ -100,13 +100,13 @@ create policy "shops_owner_write" on public.barbers for all
 
 ### Rule 4 — Publishable key in the browser; service-role key ONLY in the webhook + admin server routes (Vercel server env, never the browser).
 
-> **The rule:** The front-end uses **only** the Supabase **publishable key** (`sb_publishable_*`, RLS-protected, browser-safe). The **service-role key** — which **bypasses RLS entirely** — lives **only** in **Vercel server env** (`SUPABASE_SERVICE_ROLE_KEY`) and is read **only** by server-side code: the Stripe webhook (M2.1) and admin server routes (M2.2). It must never appear in client code, a Lovable prompt, a commit, a `NEXT_PUBLIC_*` var, or a screenshot.
+> **The rule:** The front-end uses **only** the Supabase **publishable key** (`sb_publishable_*`, RLS-protected, browser-safe). The **service-role key** — which **bypasses RLS entirely** — lives **only** in **Vercel server env** (`SUPABASE_SECRET_KEY`) and is read **only** by server-side code: the Stripe webhook (M2.1) and admin server routes (M2.2). It must never appear in client code, a Lovable prompt, a commit, a `NEXT_PUBLIC_*` var, or a screenshot.
 
 **Why:** The publishable key can only do what RLS + auth allow — safe to ship. The **service-role key owns the database**: it ignores every RLS policy, so anyone who gets it can read every shop's bank account and rewrite the payout ledger. The webhook *needs* it (Stripe carries no user session, so it must flip a booking to `paid` past RLS) and the admin payout writes need it — but those are **server-only** contexts. The instant it's prefixed `NEXT_PUBLIC_` or pasted into a component, it's in every visitor's network tab. There is no recovering a leaked service-role key except rotation.
 
 **How to apply:**
-- Front-end / Lovable: publishable (anon) key only — `NEXT_PUBLIC_SUPABASE_URL` + the publishable key.
-- Server routes (`/api/stripe/webhook`, `/api/admin/*`): create the client with `SUPABASE_SERVICE_ROLE_KEY` from **Vercel server env** (no `NEXT_PUBLIC_` prefix). This key is read at request time; it is **not** stored in AWS ([[aws-secrets-best-practice]]).
+- Front-end (the in-repo Vite/React client): publishable (anon) key only — `NEXT_PUBLIC_SUPABASE_URL` + the publishable key.
+- Server routes (`/api/stripe/webhook`, `/api/admin/*`): create the client with `SUPABASE_SECRET_KEY` from **Vercel server env** (no `NEXT_PUBLIC_`/`VITE_` prefix). This key is read at request time; it is **not** stored in AWS ([[aws-secrets-best-practice]]).
 - If a student pastes a `service_role` key into the front-end, a `NEXT_PUBLIC_*` var, or a commit → **stop them**, explain the blast radius, and rotate it (dashboard → Settings → API → roll).
 - **Go-live check:** grep the deployed browser bundle for `service_role` / the service key → must be **absent** (only the publishable key may appear client-side).
 
@@ -162,7 +162,7 @@ create policy "shops_owner_write" on public.barbers for all
 2. **A new table with RLS still off** → Rule 2 (`get_advisors` flags it; the publishable key can read/write every tenant's rows).
 3. **Bank account numbers showing up in the `/barbers` listing payload, or bank columns added to `barbers`** → Rule 3 (bank fields are shop-level on `profiles`; `barbers` must carry none, and no public read may project them).
 4. **A join (`select '*, services(*)'`) returns empty with no error** → Rule 2 (RLS denied one side silently; check the policy, not the query).
-5. **`SUPABASE_SERVICE_ROLE_KEY` prefixed `NEXT_PUBLIC_` or in a component** → Rule 4 (it bypasses RLS — rotate immediately; it belongs in Vercel server env only).
+5. **`SUPABASE_SECRET_KEY` prefixed `NEXT_PUBLIC_`/`VITE_` or in a component** → Rule 4 (it bypasses RLS — rotate immediately; it belongs in Vercel server env only).
 6. **The webhook can't flip a booking to `paid` (RLS denies it)** → Rule 4 (the webhook must use the **service-role** client; the publishable key can't write past RLS for a non-user actor).
 7. **A `unique(shop_id)` on `barbers` blocking a second barber, or a `unique(shop_id, month)` on `payouts` blocking a second batch** → Rule 5 (a shop runs MANY barbers AND has MANY payout batches; index `shop_id` on both, make neither unique; no-double-pay is on `bookings.payout_id`, not a unique on `payouts`).
 8. **Skipping `get_advisors` after a migration** → run it every time; it's the cheapest catch for an RLS gap before it ships.
