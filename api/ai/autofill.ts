@@ -9,7 +9,6 @@ export const config = { maxDuration: 60 };
 const MAX_PHOTOS = 6;
 const REFS_PER_PHOTO = 3;
 const MAX_REFS = 8;
-const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
 
 type Photo = { id: string; storage_path: string; is_featured: boolean };
 type Ref = { id: string; name: string; category: string; description: string; similarity: number };
@@ -84,6 +83,16 @@ async function embedMissingStyleRefs() {
   );
 }
 
+// Download a portfolio photo ourselves and inline it as a data URL. Handing OpenAI the
+// public Storage URL makes it fetch the file itself, which can time out on a cold
+// (uncached) photo and fail the whole request with "Unable to download content".
+async function photoDataUrl(path: string) {
+  const { data, error } = await supabaseAdmin.storage.from("barber-photos").download(path);
+  if (error || !data) throw error ?? new Error(`could not download ${path}`);
+  const base64 = Buffer.from(await data.arrayBuffer()).toString("base64");
+  return `data:${data.type || "image/jpeg"};base64,${base64}`;
+}
+
 // POST { barber_id } with the shop's Supabase access token → a draft. Writes nothing to
 // barbers / barber_photos: the shop reviews the draft and saves it from the browser.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -119,11 +128,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const photos = (featured.length > 0 ? featured : all).slice(0, MAX_PHOTOS);
   if (photos.length === 0) return res.status(400).json({ error: "請先上傳作品照" });
   const photoIds = new Set(photos.map((p) => p.id));
-  const publicUrl = (path: string) =>
-    `${SUPABASE_URL}/storage/v1/object/public/barber-photos/${path}`;
 
   try {
     await embedMissingStyleRefs();
+    const images = await Promise.all(photos.map((p) => photoDataUrl(p.storage_path)));
 
     // 3. Look at the photos (model call 1).
     const described = await chatJson<{ photos: { photo_id: string; description: string }[] }>({
@@ -132,11 +140,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       schema: DESCRIBE_SCHEMA,
       user: [
         { type: "text", text: "請依序描述以下每張作品照，photo_id 照抄。" },
-        ...photos.flatMap((p) => [
+        ...photos.flatMap((p, i) => [
           { type: "text" as const, text: `photo_id: ${p.id}` },
           {
             type: "image_url" as const,
-            image_url: { url: publicUrl(p.storage_path), detail: "low" as const },
+            image_url: { url: images[i]!, detail: "low" as const },
           },
         ]),
       ],
