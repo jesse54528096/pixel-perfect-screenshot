@@ -502,9 +502,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 Implement this directly in the app repo (code-first). The spec, in the student's language:
 
+> 先讓店家選「要讓 AI 寫哪幾張」：
+> - 每張作品照下方、**「精選 / Featured」的右邊**加一個 **「AI」勾選框**。這跟「精選」是兩回事：精選只管公開頁輪播排序，AI 勾選框只決定這次要讓 AI 看哪幾張。勾選狀態只存在畫面上（不寫資料庫），重新整理就清空。
+> - 「+ 上傳 / Upload」按鈕**左邊**加一顆 **「全部選取 / Select all」**，一次勾起所有照片的 AI 勾選框；全部都勾了時按鈕變成「取消全選 / Clear」。
+> - **沒有張數上限**：勾幾張，AI 就看幾張、為這幾張寫說明。
+>
 > 在 `/shop` 每張理髮師卡片上加一顆 **「AI 自動填寫」** 按鈕：
-> - 這位理髮師**沒有任何作品照**時，按鈕停用，旁邊提示「先上傳作品照，AI 才能幫你寫」。
-> - 按下後呼叫 `POST /api/ai/autofill`，body `{ barber_id }`，header 帶 `Authorization: Bearer <目前登入的 access token>`（跟 M2.1 付款按鈕一樣的寫法）。等待時按鈕顯示「AI 撰寫中…」並停用，避免重複送出。
+> - **沒有勾任何照片**時，按鈕停用，旁邊提示「勾選照片的 AI，再按『AI 自動填寫』」（沒有作品照時提示「先上傳作品照，AI 才能幫你寫」）；有勾的時候提示「AI 會為勾選的 N 張照片撰寫說明」。
+> - 按下後呼叫 `POST /api/ai/autofill`，body `{ barber_id, photo_ids }`（勾選的照片 id），header 帶 `Authorization: Bearer <目前登入的 access token>`（跟 M2.1 付款按鈕一樣的寫法）。等待時按鈕顯示「AI 撰寫中…」並停用，避免重複送出。
 > - 成功後打開一個**對話框（Dialog）**顯示草稿：
 >   1. **自我介紹**：一個可編輯的多行文字框，預填 `intro`。
 >   2. **作品照說明**：每張照片一列 —— 左邊縮圖、右邊可編輯的說明輸入框（預填 `caption`），下面用小標籤顯示「參考：漸層推剪 Fade、油頭 Slick Back」（來自 `refs[].name`）。
@@ -512,13 +517,14 @@ Implement this directly in the app repo (code-first). The spec, in the student's
 >   4. 兩顆按鈕：**「套用」**、**「取消」**。
 > - **「套用」**才寫入資料庫（用前端原本的 Supabase client、店家自己的登入身分）：更新這位理髮師的 `barbers.intro`，以及每張有說明的照片的 `barber_photos.caption`。成功後關閉對話框、重新載入卡片資料，顯示「已套用」。
 > - **「取消」**直接關閉，什麼都不寫。
-> - API 回錯誤時顯示訊息（401 → 請重新登入；403 → 這不是你的理髮師；400 → 先上傳作品照；其他 → 「AI 服務暫時無法使用，請稍後再試」）。
+> - API 回錯誤時顯示訊息（401 → 請重新登入；403 → 這不是你的理髮師；400 → 請先勾選要讓 AI 撰寫的照片；其他 → 「AI 服務暫時無法使用，請稍後再試」）。
 
 > **Note for Claude Code:**
 > - Reuse the project's existing `Dialog`, `Textarea`, `Input`, `Badge`, `Button` (shadcn) components and the same token-fetch helper pattern as M2.1's `goToCheckout` (`supabase.auth.getSession()` → `access_token`).
 > - The「套用」writes go through the **existing M1.1 policies** (`shops_update_own` on `barbers`, `photos_write_own` on `barber_photos`). Do **not** add a server endpoint for saving, and do **not** add new RLS — the shop is only editing its own rows.
 > - Never call OpenAI from the browser and never reference `OPENAI_API_KEY` in `src/`. The browser only talks to `/api/ai/autofill`.
 > - Show the thumbnail with the same public-URL helper the photo uploader / carousel already uses.
+> - **Keep the AI selection in the barber card** (`useState<Set<string>>`) and pass it into the photo manager with an `onChange` callback, so the checkboxes, 全部選取 and the「AI 自動填寫」button share one state. Send only ids of photos that still exist (a deleted photo's id is dropped). Don't reuse `is_featured` for this: it already drives the public carousel order (M1.1).
 > - **Refresh the photo caption inputs after 套用.** If the photo manager renders captions as uncontrolled inputs (`defaultValue`), invalidating the query alone leaves the old text on screen. Key each photo on `id + caption` (e.g. `key={`${photo.id}:${photo.caption ?? ""}`}`) so the inputs remount with the saved caption.
 
 ---
