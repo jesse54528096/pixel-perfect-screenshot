@@ -111,6 +111,8 @@ limit 1;
 
 - **B5 Errors are generic to the browser, detailed in logs.** Check the function returns a generic message on failure (`AI 服務暫時無法使用…`) and logs the detail with `console.error` — it must never echo the OpenAI response body to the client. (Structural check in the source; optionally confirm a past error in `get_runtime_logs`.)
 
+- **B6 Photos are sent inline, not by URL.** In the source, the vision call's `image_url.url` values come from `photoDataUrl()` (a `data:` URL built from a service-role Storage download), not from a public Storage URL. ❌ if it passes `…/storage/v1/object/public/…` to OpenAI: the first press on uncached photos intermittently fails with `invalid_image_url — Unable to download content from the provided URL before the timeout` (a retry "fixes" it). If the student reports「有時候要按兩次」, search `get_runtime_logs` for `autofill failed`. *Recovery:* M4 Step 3 (`photoDataUrl`).
+
 #### Section C — Secret handling
 
 - **C1 Env vars are right.** Vercel MCP, names/types only: `OPENAI_API_KEY` present with type **sensitive** (or encrypted), `OPENAI_MODEL` present, **no** variable whose name starts with `VITE_` and contains `OPENAI`. Never print values.
@@ -140,6 +142,7 @@ Emit a table:
 | B3 draft shape + server-side validation of ids | ✅ / ❌ | |
 | B4 nothing written until 套用 | ✅ / ❌ | unchanged while the draft is open |
 | B5 generic errors to the browser, details in logs | ✅ / ❌ | |
+| B6 photos sent inline (no OpenAI URL fetch) | ✅ / ❌ | prevents the「要按兩次」timeout |
 | C1 `OPENAI_API_KEY` Sensitive, no `VITE_OPENAI…` | ✅ / ❌ | |
 | C2 key / OpenAI host not in the browser bundle | ✅ / ❌ | |
 | C3 OpenAI called only from `api/` | ✅ / ❌ | |
@@ -148,4 +151,4 @@ Emit a table:
 
 **Verdict:**
 - All ✅ (⚠️ allowed on A3) → 「M4 驗收通過 ✅ —— 髮型範本知識庫（pgvector）24 筆都有向量、相似度檢索找得到同類髮型；`/api/ai/autofill` 只讓擁有這位理髮師的店家使用（別人呼叫會被 403 擋下）、會在伺服器端檢查 AI 的輸出、而且只回傳草稿，草稿顯示時資料完全不變、按『套用』才用店家自己的權限存檔並出現在公開頁面；OpenAI 金鑰只在 Vercel 伺服器端，前端打包檔裡找不到。RAG 三步（向量化 → 檢索 → 生成）都做到了，整個課程完成 🎉」
-- Any ❌ → list the failed items with their recovery step and tell the student to fix and re-run `驗收 M4`. Common failures: the function was never run successfully so nothing is embedded (A2 — usually the OpenAI key/quota/model), `match_style_refs` still executable by `authenticated` because only `anon` was revoked (A4), the ownership check is missing (B2), the API writes `intro` itself (B4), or the key was added as `VITE_OPENAI_API_KEY` (C1/C2).
+- Any ❌ → list the failed items with their recovery step and tell the student to fix and re-run `驗收 M4`. Common failures: the function was never run successfully so nothing is embedded (A2 — usually the OpenAI key/quota/model), `match_style_refs` still executable by `authenticated` because only `anon` was revoked (A4), the ownership check is missing (B2), the API writes `intro` itself (B4), photos passed to OpenAI by URL so the first press times out (B6), or the key was added as `VITE_OPENAI_API_KEY` (C1/C2).

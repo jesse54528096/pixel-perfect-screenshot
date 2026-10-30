@@ -54,7 +54,7 @@ All schema changes go through **`apply_migration`** — never the SQL editor ([[
         │
         ▼  Vercel function (OPENAI_API_KEY + SUPABASE_SECRET_KEY, server-only)
    1 auth.getUser(token) → barber.shop_id must equal the caller   (else 403)
-   2 barber_photos: is_featured first (else newest), max 6 → public bucket URLs
+   2 barber_photos: is_featured first (else newest), max 6 → downloaded by the function, sent inline (data URLs)
    0 style_refs rows with embedding NULL → OpenAI embeddings → write back   (RAG: vectorize the knowledge base)
    3 GPT (vision)   photos → one hairstyle description each                 (RAG: vectorize the query…)
    4 OpenAI embeddings  descriptions → vector(1536)                          (…step 1)
@@ -284,7 +284,6 @@ export const config = { maxDuration: 60 };
 const MAX_PHOTOS = 6;
 const REFS_PER_PHOTO = 3;
 const MAX_REFS = 8;
-const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
 
 type Photo = { id: string; storage_path: string; is_featured: boolean };
 type Ref = { id: string; name: string; category: string; description: string; similarity: number };
@@ -359,6 +358,16 @@ async function embedMissingStyleRefs() {
   );
 }
 
+// Download a portfolio photo ourselves and inline it as a data URL. Handing OpenAI the
+// public Storage URL makes it fetch the file itself, which can time out on a cold
+// (uncached) photo and fail the whole request with "Unable to download content".
+async function photoDataUrl(path: string) {
+  const { data, error } = await supabaseAdmin.storage.from("barber-photos").download(path);
+  if (error || !data) throw error ?? new Error(`could not download ${path}`);
+  const base64 = Buffer.from(await data.arrayBuffer()).toString("base64");
+  return `data:${data.type || "image/jpeg"};base64,${base64}`;
+}
+
 // POST { barber_id } with the shop's Supabase access token → a draft. Writes nothing to
 // barbers / barber_photos: the shop reviews the draft and saves it from the browser.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -394,10 +403,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const photos = (featured.length > 0 ? featured : all).slice(0, MAX_PHOTOS);
   if (photos.length === 0) return res.status(400).json({ error: "請先上傳作品照" });
   const photoIds = new Set(photos.map((p) => p.id));
-  const publicUrl = (path: string) => `${SUPABASE_URL}/storage/v1/object/public/barber-photos/${path}`;
 
   try {
     await embedMissingStyleRefs();
+    const images = await Promise.all(photos.map((p) => photoDataUrl(p.storage_path)));
 
     // 3. Look at the photos (model call 1).
     const described = await chatJson<{ photos: { photo_id: string; description: string }[] }>({
@@ -406,9 +415,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       schema: DESCRIBE_SCHEMA,
       user: [
         { type: "text", text: "請依序描述以下每張作品照，photo_id 照抄。" },
-        ...photos.flatMap((p) => [
+        ...photos.flatMap((p, i) => [
           { type: "text" as const, text: `photo_id: ${p.id}` },
-          { type: "image_url" as const, image_url: { url: publicUrl(p.storage_path), detail: "low" as const } },
+          { type: "image_url" as const, image_url: { url: images[i]!, detail: "low" as const } },
         ]),
       ],
     });
@@ -476,6 +485,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 > - **Auth is the M2.1 pattern.** The browser sends the shop's Supabase access token as `Authorization: Bearer …`; the function verifies it with `supabaseAdmin.auth.getUser(token)` and then checks `barbers.shop_id === user.id`. Because the function uses the **service role** (bypasses RLS), this ownership check is the only thing stopping shop A from spending shop B's draft — keep it.
 > - **The knowledge base embeds itself.** `embedMissingStyleRefs()` fills any `style_refs.embedding IS NULL` at the start of each call. That removes the need for a separate admin "reindex" endpoint: seed → first press → every row has a vector. It is idempotent, so two concurrent first presses are harmless.
 > - **Vectors are passed as strings.** supabase-js sends JSON; pgvector accepts the text form `"[0.1,0.2,…]"`, so `JSON.stringify(vector)` works for both `.update({ embedding })` and the RPC argument.
+> - **Photos are sent inline, not by URL.** If you pass OpenAI the public Storage URL, OpenAI downloads the photo itself; a photo that isn't in the CDN cache yet (first press, large PNG, far-away Supabase region) can time out and the whole call fails with `400 invalid_image_url — Unable to download content from the provided URL before the timeout`, while a second press works because the cache is now warm. `photoDataUrl()` downloads each photo with the service-role client and sends it as a `data:` URL, so OpenAI never fetches anything. 6 photos of a few MB each is well inside OpenAI's request limit.
 > - **`detail: "low"`** keeps vision cost and latency down; a haircut is recognisable at low detail.
 > - **Structured Outputs (`strict: true`)** guarantees the JSON shape, but **not the content** — the model can still invent a photo id or a ref id that was never retrieved. Step 7 drops anything not in the known sets. That server-side check is a teaching point: never write model output straight into your database.
 > - **Prompt injection:** the system prompt tells the model that text inside photos is data, not instructions. Combined with "draft only" + server validation, a photo of a sign saying "ignore your instructions" can't change anything.
@@ -550,8 +560,9 @@ Report what you built and verified, then remind the student and stop:
 8. **Opening `match_style_refs` to browsers.** It is only needed by the server. Revoke from `public, anon, authenticated` (revoking only `anon` leaves the `PUBLIC` default grant in place).
 9. **Embedding the knowledge base with a different text than the queries.** Both sides must use the same embedding model; the knowledge base embeds `name：description`, the queries embed the photo descriptions — both are plain hairstyle descriptions in the same language, which is what makes them comparable.
 10. **Editing an applied migration.** To change the seed, write a new migration. And keep `drop` / `delete` out of MCP migrations (hidden confirmation → timeout).
-11. **Expecting the env vars to work without a redeploy.** A Vercel env var change only reaches functions in a **new** deployment.
-12. **Reading `500`/`502` without the logs.** The browser only sees a generic message by design; the real cause (`invalid_api_key`, `insufficient_quota`, unsupported model) is in the Vercel runtime logs.
+11. **Passing photo URLs to OpenAI.** OpenAI's own download can time out on an uncached photo ("Unable to download content from the provided URL"), so the first press fails and a retry works. Download the photo in the function and send it inline (`photoDataUrl`).
+12. **Expecting the env vars to work without a redeploy.** A Vercel env var change only reaches functions in a **new** deployment.
+13. **Reading `500`/`502` without the logs.** The browser only sees a generic message by design; the real cause (`invalid_api_key`, `insufficient_quota`, unsupported model, `invalid_image_url`) is in the Vercel runtime logs.
 
 ## Expected duration
 

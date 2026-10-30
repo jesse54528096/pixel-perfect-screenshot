@@ -1,6 +1,6 @@
 ---
 name: m4-ai-autofill-barber-prerequisites
-description: One-time setup before Milestone 4 (the egg unit「AI 自動填寫賣家商鋪資訊」) of the barber-booking course — an INTERACTIVE, agent-driven walkthrough with TWO parts. (A) The only NEW runtime wiring: the student has already stored their OpenAI API key in AWS Secrets Manager as `openai-api-key` (us-east-1, done from the student step sheet before this skill runs); the agent verifies it exists and is an `sk-…` secret, then copies it into Vercel env as `OPENAI_API_KEY` (Sensitive, Production, server-only, NEVER `VITE_`-prefixed) and adds `OPENAI_MODEL` (a vision-capable chat model) via the Vercel MCP — never printing the value. (B) A data-readiness carryover check of exactly what M4 consumes: at least one barber with portfolio photos in `barber_photos` (ideally some `is_featured = true`), the public `barber-photos` Storage bucket (so OpenAI can read the images by URL), the M1.1 RLS that lets a shop update its own `barbers.intro` + `barber_photos.caption` (the "套用" write path), `SUPABASE_SECRET_KEY` already in Vercel env from M2.1, the `pgvector` extension available, and a clean slate (no `style_refs` table / `match_style_refs` function yet — M4 creates them). Use when the student starts M4 for the first time, says "啟動 M4 前置" / "M4 prerequisites" / "check M4 setup", or when `m4-ai-autofill-barber` / `-checklist` detects a missing OpenAI env var, no photos, or no pgvector.
+description: One-time setup before Milestone 4 (the egg unit「AI 自動填寫賣家商鋪資訊」) of the barber-booking course — an INTERACTIVE, agent-driven walkthrough with TWO parts. (A) The only NEW runtime wiring: the student has already stored their OpenAI API key in AWS Secrets Manager as `openai-api-key` (us-east-1, done from the student step sheet before this skill runs); the agent verifies it exists and is an `sk-…` secret, then copies it into Vercel env as `OPENAI_API_KEY` (Sensitive, Production, server-only, NEVER `VITE_`-prefixed) and adds `OPENAI_MODEL` (a vision-capable chat model) via the Vercel MCP — never printing the value. (B) A data-readiness carryover check of exactly what M4 consumes: at least one barber with portfolio photos in `barber_photos` (ideally some `is_featured = true`), the public `barber-photos` Storage bucket (thumbnails and public pages read photos from it; the function downloads them server-side and sends them to OpenAI inline), the M1.1 RLS that lets a shop update its own `barbers.intro` + `barber_photos.caption` (the "套用" write path), `SUPABASE_SECRET_KEY` already in Vercel env from M2.1, the `pgvector` extension available, and a clean slate (no `style_refs` table / `match_style_refs` function yet — M4 creates them). Use when the student starts M4 for the first time, says "啟動 M4 前置" / "M4 prerequisites" / "check M4 setup", or when `m4-ai-autofill-barber` / `-checklist` detects a missing OpenAI env var, no photos, or no pgvector.
 ---
 
 # M4 Prerequisites — interactive setup + carryover check (the agent drives)
@@ -20,7 +20,7 @@ M4 adds an **AI draft** to the shop side. On `/shop`, a shop presses「AI 自動
 What this prereq confirms is exactly what that flow consumes:
 - **`OPENAI_API_KEY` + `OPENAI_MODEL` in Vercel env** (Part A) → the function can call OpenAI.
 - **`SUPABASE_SECRET_KEY` in Vercel env** (from M2.1) → the function reads photos and writes the knowledge-base vectors past RLS.
-- **Photos to look at** (`barber_photos` rows, ideally `is_featured`) + **the public bucket** → OpenAI can fetch each image by URL.
+- **Photos to look at** (`barber_photos` rows, ideally `is_featured`) + **the public bucket** → the draft dialog and public pages can show each photo; the function itself downloads the photos server-side and sends them to OpenAI inline.
 - **The M1.1 write policies** on `barbers` + `barber_photos` → the「套用」button can save the draft as the shop.
 - **`pgvector` available** + **a clean slate** → M4's migration can create `style_refs` + `match_style_refs`.
 
@@ -100,12 +100,12 @@ order by photos desc;
 
 > **Note for Claude Code:** good test photos are clear shots of a haircut (side/back views, a fade, a perm, a beard). Random non-hair images will still produce a draft, but the retrieval demo (A3 in the checklist) is much more convincing with real hairstyles.
 
-### B2 — The bucket is public (OpenAI reads images by URL)
+### B2 — The bucket is public (thumbnails + public pages)
 
 ```sql
 select id, public from storage.buckets where id = 'barber-photos';
 ```
-- `public = true` → ✅ OpenAI can fetch `…/storage/v1/object/public/barber-photos/<storage_path>` directly.
+- `public = true` → ✅ the draft dialog and `/barbers/:id` can show photos by public URL. (OpenAI does **not** fetch these URLs: the function downloads each photo with the service role and sends it inline, because OpenAI's own download can time out on an uncached photo.)
 - `public = false` or no row → M1.1 Step 3a didn't land as designed. Send the student to `[[m1.1-seller-setup]]` Step 3a. (Don't switch to signed URLs here — the whole course treats portfolio photos as public.)
 
 ### B3 — The「套用」write path exists (M1.1 RLS)
@@ -168,7 +168,7 @@ select to_regclass('public.style_refs')      as style_refs,
 ## Next step
 
 When all five are ✅, tell the student:
-「前置檢查通過 ✅ —— OpenAI 金鑰在 AWS Secrets Manager，也已經放進 Vercel（只在伺服器端讀得到）；`<理髮師名稱>` 有 N 張作品照（其中 M 張精選）可以給 AI 看；照片 bucket 是公開的，OpenAI 讀得到；店家本來就能改自己理髮師的介紹和照片說明，所以『套用』不用新增權限；Supabase 也可以啟用 pgvector。接下來我會：建一張**髮型範本知識庫**（pgvector 向量表）並放進 24 種常見髮型、寫一支伺服器端的 `/api/ai/autofill`（看圖 → 轉向量 → 找相似範本 → 寫草稿），再在 `/shop` 加上『AI 自動填寫』按鈕和草稿對話框。跟我說『啟動 M4』就開始。」
+「前置檢查通過 ✅ —— OpenAI 金鑰在 AWS Secrets Manager，也已經放進 Vercel（只在伺服器端讀得到）；`<理髮師名稱>` 有 N 張作品照（其中 M 張精選）可以給 AI 看；照片 bucket 是公開的，頁面上看得到照片；店家本來就能改自己理髮師的介紹和照片說明，所以『套用』不用新增權限；Supabase 也可以啟用 pgvector。接下來我會：建一張**髮型範本知識庫**（pgvector 向量表）並放進 24 種常見髮型、寫一支伺服器端的 `/api/ai/autofill`（看圖 → 轉向量 → 找相似範本 → 寫草稿），再在 `/shop` 加上『AI 自動填寫』按鈕和草稿對話框。跟我說『啟動 M4』就開始。」
 Then return to the build skill `[[m4-ai-autofill-barber]]` (Step 0/1).
 
 ## Reference
