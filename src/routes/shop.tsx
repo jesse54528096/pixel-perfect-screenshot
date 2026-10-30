@@ -4,13 +4,15 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
-import { PhotoManager, PHOTO_BUCKET } from "@/components/PhotoManager";
+import { AutofillDialog } from "@/components/AutofillDialog";
+import { PhotoManager, PHOTO_BUCKET, useBarberPhotos } from "@/components/PhotoManager";
 import {
   ShopHeader,
   fieldClass,
   ghostButtonClass,
   primaryButtonClass,
 } from "@/components/ShopHeader";
+import { requestAutofill, type AutofillDraft } from "@/lib/autofill";
 import { isOnboarded } from "@/lib/profile";
 import { usePageMeta } from "@/lib/use-page-meta";
 import { useShop } from "./require-shop";
@@ -168,6 +170,20 @@ function BarberCard({ barber }: { barber: Barber }) {
   const { user } = useShop();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
+  const { data: photos = [] } = useBarberPhotos(barber.id);
+  const [drafting, setDrafting] = useState(false);
+  const [draft, setDraft] = useState<AutofillDraft | null>(null);
+
+  async function autofill() {
+    setDrafting(true);
+    try {
+      setDraft(await requestAutofill(barber.id));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDrafting(false);
+    }
+  }
 
   async function remove() {
     if (!window.confirm(`刪除 ${barber.name}？他的服務、時段與作品照都會一起刪除。`)) return;
@@ -197,15 +213,36 @@ function BarberCard({ barber }: { barber: Barber }) {
             {barber.address && <p className="text-sm text-muted-foreground">{barber.address}</p>}
             {barber.intro && <p className="mt-2 whitespace-pre-line text-sm">{barber.intro}</p>}
           </div>
+          <button
+            onClick={autofill}
+            disabled={drafting || photos.length === 0}
+            title={photos.length === 0 ? "先上傳作品照，AI 才能幫你寫" : undefined}
+            className={ghostButtonClass}
+          >
+            {drafting ? "AI 撰寫中…" : "AI 自動填寫"}
+          </button>
           <button onClick={() => setEditing(true)} className={ghostButtonClass}>
             編輯 / Edit
           </button>
           <button onClick={remove} className={`${ghostButtonClass} text-destructive`}>
             刪除 / Delete
           </button>
+          {photos.length === 0 && (
+            <p className="basis-full text-right text-xs text-muted-foreground">
+              先上傳作品照，AI 才能幫你寫
+            </p>
+          )}
         </div>
       )}
       <PhotoManager barberId={barber.id} />
+      {draft && (
+        <AutofillDialog
+          barber={barber}
+          photos={photos}
+          draft={draft}
+          onClose={() => setDraft(null)}
+        />
+      )}
     </div>
   );
 }

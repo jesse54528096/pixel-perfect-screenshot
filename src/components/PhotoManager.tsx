@@ -14,14 +14,9 @@ export function photoUrl(path: string) {
   return supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
-// Sample hairstyle photos for one barber. Files live at <barber_id>/<uuid>.<ext>
-// in the public bucket; the Storage policy only lets the owning shop write there.
-export function PhotoManager({ barberId }: { barberId: string }) {
-  const queryClient = useQueryClient();
-  const queryKey = ["barber_photos", barberId];
-  const [uploading, setUploading] = useState(false);
-  const { data: photos = [] } = useQuery({
-    queryKey,
+export function useBarberPhotos(barberId: string) {
+  return useQuery({
+    queryKey: ["barber_photos", barberId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("barber_photos")
@@ -33,6 +28,15 @@ export function PhotoManager({ barberId }: { barberId: string }) {
       return data;
     },
   });
+}
+
+// Sample hairstyle photos for one barber. Files live at <barber_id>/<uuid>.<ext>
+// in the public bucket; the Storage policy only lets the owning shop write there.
+export function PhotoManager({ barberId }: { barberId: string }) {
+  const queryClient = useQueryClient();
+  const queryKey = ["barber_photos", barberId];
+  const [uploading, setUploading] = useState(false);
+  const { data: photos = [] } = useBarberPhotos(barberId);
   const refresh = () => queryClient.invalidateQueries({ queryKey });
 
   async function onFiles(e: ChangeEvent<HTMLInputElement>) {
@@ -119,7 +123,11 @@ export function PhotoManager({ barberId }: { barberId: string }) {
       ) : (
         <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
           {photos.map((photo, i) => (
-            <figure key={photo.id} className="overflow-hidden rounded-2xl border border-border">
+            <figure
+              // Captions are uncontrolled inputs: remount when an AI draft is applied.
+              key={`${photo.id}:${photo.caption ?? ""}`}
+              className="overflow-hidden rounded-2xl border border-border"
+            >
               <img
                 src={photoUrl(photo.storage_path)}
                 alt={photo.caption ?? "Sample hairstyle"}
