@@ -459,13 +459,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }),
     });
 
-    // 7. Never trust the model blindly: keep only known photos and retrieved refs.
+    // 7. Never trust the model blindly: keep only known photos and retrieved refs,
+    // and one caption per photo (the model sometimes repeats a photo_id).
     const refIds = new Set(refs.map((r) => r.id));
     const refName = new Map(refs.map((r) => [r.id, r.name]));
     const intro = draft.intro.trim().slice(0, 300);
     if (!intro) throw new Error("empty intro");
+    const captioned = new Set<string>();
     const captions = draft.photo_captions
-      .filter((c) => photoIds.has(c.photo_id) && c.caption.trim())
+      .filter((c) => {
+        if (!photoIds.has(c.photo_id) || !c.caption.trim() || captioned.has(c.photo_id)) return false;
+        captioned.add(c.photo_id);
+        return true;
+      })
       .map((c) => ({
         photo_id: c.photo_id,
         caption: c.caption.trim().slice(0, 120),
@@ -491,7 +497,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 > - **Vectors are passed as strings.** supabase-js sends JSON; pgvector accepts the text form `"[0.1,0.2,…]"`, so `JSON.stringify(vector)` works for both `.update({ embedding })` and the RPC argument.
 > - **Photos are sent inline, not by URL.** If you pass OpenAI the public Storage URL, OpenAI downloads the photo itself; a photo that isn't in the CDN cache yet (first press, large PNG, far-away Supabase region) can time out and the whole call fails with `400 invalid_image_url — Unable to download content from the provided URL before the timeout`, while a second press works because the cache is now warm. `photoDataUrl()` downloads each photo with the service-role client and sends it as a `data:` URL, so OpenAI never fetches anything. 6 photos of a few MB each is well inside OpenAI's request limit.
 > - **`detail: "low"`** keeps vision cost and latency down; a haircut is recognisable at low detail.
-> - **Structured Outputs (`strict: true`)** guarantees the JSON shape, but **not the content** — the model can still invent a photo id or a ref id that was never retrieved. Step 7 drops anything not in the known sets. That server-side check is a teaching point: never write model output straight into your database.
+> - **Structured Outputs (`strict: true`)** guarantees the JSON shape, but **not the content** — the model can still invent a photo id or a ref id that was never retrieved, or return **two captions for the same photo** (the dialog then shows that photo twice). Step 7 drops anything not in the known sets and keeps only the first caption per photo. That server-side check is a teaching point: never write model output straight into your database.
 > - **Prompt injection:** the system prompt tells the model that text inside photos is data, not instructions. Combined with "draft only" + server validation, a photo of a sign saying "ignore your instructions" can't change anything.
 > - **Errors** are logged server-side (`console.error`, visible in Vercel runtime logs) and returned to the browser as a generic 502 — never echo the OpenAI error body (it can include request details).
 > - **`maxDuration: 60`** — two model calls plus embeddings usually take 5–20 s; the default function timeout can be shorter.

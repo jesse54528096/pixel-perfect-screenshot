@@ -194,13 +194,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }),
     });
 
-    // 7. Never trust the model blindly: keep only known photos and retrieved refs.
+    // 7. Never trust the model blindly: keep only known photos and retrieved refs,
+    // and one caption per photo (the model sometimes repeats a photo_id).
     const refIds = new Set(refs.map((r) => r.id));
     const refName = new Map(refs.map((r) => [r.id, r.name]));
     const intro = draft.intro.trim().slice(0, 300);
     if (!intro) throw new Error("empty intro");
+    const captioned = new Set<string>();
     const captions = draft.photo_captions
-      .filter((c) => photoIds.has(c.photo_id) && c.caption.trim())
+      .filter((c) => {
+        if (!photoIds.has(c.photo_id) || !c.caption.trim() || captioned.has(c.photo_id))
+          return false;
+        captioned.add(c.photo_id);
+        return true;
+      })
       .map((c) => ({
         photo_id: c.photo_id,
         caption: c.caption.trim().slice(0, 120),
