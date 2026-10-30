@@ -28,7 +28,7 @@ The student invokes this directly (e.g. `驗收 M4`). You **actively run** each 
 
 ### Step 1: Collect (one message)
 
-Don't ask the student for anything you can look up. Reuse the **live Vercel URL** from earlier milestones (Vercel MCP `get_project`), and pick the test barber yourself — the one with the most photos (query below). Tell the student up front that their only part is **one press**: sign in as that barber's shop, press「AI 自動填寫」, wait for the draft, tell you, then press「套用」when you say so.
+Don't ask the student for anything you can look up. Reuse the **live Vercel URL** from earlier milestones (Vercel MCP `get_project`), and pick the test barber yourself — the one with the most photos (query below). Tell the student up front that their only part is **one press**: sign in as that barber's shop, tick「AI」on a few photos (or「全部選取」), press「AI 自動填寫」, wait for the draft, tell you, then press「套用」when you say so.
 
 Then confirm the newest deployment is **READY** (Vercel MCP `list_deployments`) and note the test barber's id:
 ```sql
@@ -104,8 +104,8 @@ limit 1;
      from public.barbers b join public.barber_photos p on p.barber_id = b.id
      where b.id = '<test barber id>' group by b.id;
      ```
-  2. The student (signed in as the owning shop) presses「AI 自動填寫」and tells you when the draft dialog is showing. Ask them to read you the ref tags (or send a screenshot).
-  3. **B3:** the dialog shows an editable intro, one caption row per photo with a thumbnail, ref tags, and the "AI 參考了這些髮型範本" line. Every ref tag must be a real `style_refs.name`. Also confirm in the source that the server filters captions to the barber's own photo ids, ref ids to the retrieved set, and caps the intro length. *Recovery:* Step 7 of the function.
+  2. The student (signed in as the owning shop) ticks「AI」on some photos, presses「AI 自動填寫」and tells you when the draft dialog is showing. Ask them to read you the ref tags (or send a screenshot).
+  3. **B3:** the dialog shows an editable intro, one caption row per **ticked** photo with a thumbnail (exactly the ticked ones, no 6-photo cap), ref tags, and the "AI 參考了這些髮型範本" line. Every ref tag must be a real `style_refs.name`. Also confirm in the source that the server only loads the requested `photo_ids` that belong to this barber (`.eq("barber_id", …).in("id", photo_ids)`), filters captions to those photo ids, ref ids to the retrieved set, and caps the intro length. *Recovery:* Step 7 of the function.
   4. **B4:** with the dialog still open, re-run the query from 1 → **identical** result. ❌ if the intro or any caption already changed (the API is writing on its own).
   5. Now tell the student to press **「套用」** — that is D1.
 

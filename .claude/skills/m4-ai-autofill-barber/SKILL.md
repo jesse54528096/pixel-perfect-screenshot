@@ -1,6 +1,6 @@
 ---
 name: m4-ai-autofill-barber
-description: 抽成制理髮師預約平台 Milestone 4 (the egg unit「AI 自動填寫賣家商鋪資訊」, course 4-19) — a RAG feature on the shop side. Create a hairstyle knowledge base `style_refs` (Supabase pgvector, vector(1536), HNSW index, public read / server-only write) seeded with 24 common hairstyles, a `match_style_refs` cosine-similarity RPC (service-role only), and ONE Vercel serverless function `/api/ai/autofill` that, for a barber the caller's shop owns, reads the `is_featured` portfolio photos → GPT describes each hairstyle (vision, Structured Outputs) → OpenAI `text-embedding-3-small` turns each description into a vector → `match_style_refs` retrieves the closest hairstyle references → GPT writes the barber's `intro` + a caption per photo using the retrieved names → the function server-side validates and returns a DRAFT (it writes nothing to barbers/barber_photos). On `/shop`, an「AI 自動填寫」button opens a draft dialog the shop edits; only「套用」saves `barbers.intro` + `barber_photos.caption` through the existing M1.1 RLS. `OPENAI_API_KEY` stays server-only in Vercel env. Use when the student says "啟動 M4", "start M4", "AI 自動填寫", "AI 寫理髮師介紹", "RAG 向量資料庫", or any variant of "讓 AI 看作品照幫店家填資料".
+description: 抽成制理髮師預約平台 Milestone 4 (the egg unit「AI 自動填寫賣家商鋪資訊」, course 4-19) — a RAG feature on the shop side. Create a hairstyle knowledge base `style_refs` (Supabase pgvector, vector(1536), HNSW index, public read / server-only write) seeded with 24 common hairstyles, a `match_style_refs` cosine-similarity RPC (service-role only), and ONE Vercel serverless function `/api/ai/autofill` that, for a barber the caller's shop owns, reads the portfolio photos the shop ticked for AI (a per-photo「AI」checkbox, separate from 精選 / Featured, no count limit) → GPT describes each hairstyle (vision, Structured Outputs) → OpenAI `text-embedding-3-small` turns each description into a vector → `match_style_refs` retrieves the closest hairstyle references → GPT writes the barber's `intro` + a caption per photo using the retrieved names → the function server-side validates and returns a DRAFT (it writes nothing to barbers/barber_photos). On `/shop`, an「AI 自動填寫」button opens a draft dialog the shop edits; only「套用」saves `barbers.intro` + `barber_photos.caption` through the existing M1.1 RLS. `OPENAI_API_KEY` stays server-only in Vercel env. Use when the student says "啟動 M4", "start M4", "AI 自動填寫", "AI 寫理髮師介紹", "RAG 向量資料庫", or any variant of "讓 AI 看作品照幫店家填資料".
 ---
 
 # M4 — AI 自動填寫賣家商鋪資訊（RAG + Supabase 向量資料庫）
@@ -50,11 +50,11 @@ All schema changes go through **`apply_migration`** — never the SQL editor ([[
 
 ```
 /shop (browser, shop session)
-  └─「AI 自動填寫」 POST /api/ai/autofill { barber_id }  + Bearer <shop access token>
+  └─ tick「AI」on photos →「AI 自動填寫」 POST /api/ai/autofill { barber_id, photo_ids }  + Bearer <shop access token>
         │
         ▼  Vercel function (OPENAI_API_KEY + SUPABASE_SECRET_KEY, server-only)
    1 auth.getUser(token) → barber.shop_id must equal the caller   (else 403)
-   2 barber_photos: is_featured first (else newest), max 6 → downloaded by the function, sent inline (data URLs)
+   2 barber_photos: exactly the photo_ids the shop ticked (must belong to this barber) → downloaded by the function, sent inline (data URLs)
    0 style_refs rows with embedding NULL → OpenAI embeddings → write back   (RAG: vectorize the knowledge base)
    3 GPT (vision)   photos → one hairstyle description each                 (RAG: vectorize the query…)
    4 OpenAI embeddings  descriptions → vector(1536)                          (…step 1)
@@ -99,7 +99,7 @@ Confirm (or re-confirm, if the prereq just ran):
   from public.barbers b left join public.barber_photos p on p.barber_id = b.id
   group by b.id order by photos desc;
   ```
-  At least one barber with `photos >= 1` → continue. None → stop: the student uploads 3–6 hairstyle photos on `/shop` first.
+  At least one barber with `photos >= 1` → continue. None → stop: the student uploads 3–6 hairstyle photos on `/shop` first. (`featured` is informational only: the AI uses the photos ticked with the per-photo「AI」checkbox, not 精選.)
 - **Clean slate**: `select to_regclass('public.style_refs'), to_regproc('public.match_style_refs');` — both NULL (or, after a partial run, matching the shape below).
 
 ---
@@ -281,11 +281,10 @@ import { chatJson, embed } from "../_openai.js";
 // Two model calls + embeddings can take a while; the default timeout may be too short.
 export const config = { maxDuration: 60 };
 
-const MAX_PHOTOS = 6;
 const REFS_PER_PHOTO = 3;
 const MAX_REFS = 8;
 
-type Photo = { id: string; storage_path: string; is_featured: boolean };
+type Photo = { id: string; storage_path: string };
 type Ref = { id: string; name: string; category: string; description: string; similarity: number };
 
 // Photos may contain text (signs, captions, watermarks). It is data, never instructions.
@@ -379,8 +378,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { data: auth, error: authError } = await supabaseAdmin.auth.getUser(token);
   if (authError || !auth.user) return res.status(401).json({ error: "not signed in" });
 
-  const barberId = (req.body as { barber_id?: unknown } | undefined)?.barber_id;
+  const body = req.body as { barber_id?: unknown; photo_ids?: unknown } | undefined;
+  const barberId = body?.barber_id;
   if (typeof barberId !== "string") return res.status(400).json({ error: "barber_id required" });
+  const requested = Array.isArray(body?.photo_ids)
+    ? body.photo_ids.filter((id): id is string => typeof id === "string")
+    : [];
+  if (requested.length === 0) return res.status(400).json({ error: "請先勾選要讓 AI 撰寫的照片" });
 
   const { data: barber, error: barberError } = await supabaseAdmin
     .from("barbers")
@@ -391,17 +395,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!barber) return res.status(404).json({ error: "barber not found" });
   if (barber.shop_id !== auth.user.id) return res.status(403).json({ error: "not your barber" });
 
-  // 2. Featured photos first; with none featured, the newest ones.
+  // 2. Exactly the photos the shop ticked for AI, and only ones that belong to this barber.
   const { data: photoRows, error: photoError } = await supabaseAdmin
     .from("barber_photos")
-    .select("id, storage_path, is_featured")
+    .select("id, storage_path")
     .eq("barber_id", barberId)
-    .order("created_at", { ascending: false });
+    .in("id", requested)
+    .order("sort_order")
+    .order("created_at");
   if (photoError) return res.status(500).json({ error: "could not load photos" });
-  const all = (photoRows ?? []) as Photo[];
-  const featured = all.filter((p) => p.is_featured);
-  const photos = (featured.length > 0 ? featured : all).slice(0, MAX_PHOTOS);
-  if (photos.length === 0) return res.status(400).json({ error: "請先上傳作品照" });
+  const photos = (photoRows ?? []) as Photo[];
+  if (photos.length === 0) return res.status(400).json({ error: "請先勾選要讓 AI 撰寫的照片" });
   const photoIds = new Set(photos.map((p) => p.id));
 
   try {
@@ -524,7 +528,7 @@ Implement this directly in the app repo (code-first). The spec, in the student's
 1. **Regenerate types**: `generate_typescript_types` → write the output to `src/integrations/supabase/types.ts` yourself (the new `style_refs` table + `match_style_refs` function). Run the project's type-check/build.
 2. **`get_advisors`** (security): no new ERROR. There must be **no** `extension_in_public` (the extension is in `extensions`) and **no** `rls_disabled_in_public` for `style_refs`.
 3. **Push** to `main` → confirm the deployment is **READY** (Vercel MCP).
-4. **First real run (the student):** ask the student to open `/shop`, press「AI 自動填寫」on the barber with photos, look at the draft, and press「取消」(not 套用 yet — the checklist uses that). Then confirm the knowledge base embedded itself:
+4. **First real run (the student):** ask the student to open `/shop`, tick「AI」on a few photos (or press「全部選取」), press「AI 自動填寫」on that barber, look at the draft, and press「取消」(not 套用 yet — the checklist uses that). Then confirm the knowledge base embedded itself:
    ```sql
    select count(*) as refs, count(embedding) as embedded from public.style_refs;
    ```
@@ -571,7 +575,7 @@ Report what you built and verified, then remind the student and stop:
 ## Next step
 
 When `m4-ai-autofill-barber-checklist` is green, tell the student:
-「M4 完成了！店家現在按一下『AI 自動填寫』，AI 就會看精選作品照、到髮型範本資料庫找最相近的髮型（這就是 RAG：向量化 → 相似度檢索 → 帶著檢索結果生成），寫好理髮師介紹和每張照片的說明，店家確認後按『套用』才存檔。OpenAI 金鑰只在伺服器端，AI 也不會自己改你的資料 ✅」
+「M4 完成了！店家現在按一下『AI 自動填寫』，AI 就會看你勾選的作品照、到髮型範本資料庫找最相近的髮型（這就是 RAG：向量化 → 相似度檢索 → 帶著檢索結果生成），寫好理髮師介紹和每張照片的說明，店家確認後按『套用』才存檔。OpenAI 金鑰只在伺服器端，AI 也不會自己改你的資料 ✅」
 
 ## Reference
 

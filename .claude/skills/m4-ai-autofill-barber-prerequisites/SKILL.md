@@ -1,6 +1,6 @@
 ---
 name: m4-ai-autofill-barber-prerequisites
-description: One-time setup before Milestone 4 (the egg unit「AI 自動填寫賣家商鋪資訊」) of the barber-booking course — an INTERACTIVE, agent-driven walkthrough with TWO parts. (A) The only NEW runtime wiring: the student has already stored their OpenAI API key in AWS Secrets Manager as `openai-api-key` (us-east-1, done from the student step sheet before this skill runs); the agent verifies it exists and is an `sk-…` secret, then copies it into Vercel env as `OPENAI_API_KEY` (Sensitive, Production, server-only, NEVER `VITE_`-prefixed) and adds `OPENAI_MODEL` (a vision-capable chat model) via the Vercel MCP — never printing the value. (B) A data-readiness carryover check of exactly what M4 consumes: at least one barber with portfolio photos in `barber_photos` (ideally some `is_featured = true`), the public `barber-photos` Storage bucket (thumbnails and public pages read photos from it; the function downloads them server-side and sends them to OpenAI inline), the M1.1 RLS that lets a shop update its own `barbers.intro` + `barber_photos.caption` (the "套用" write path), `SUPABASE_SECRET_KEY` already in Vercel env from M2.1, the `pgvector` extension available, and a clean slate (no `style_refs` table / `match_style_refs` function yet — M4 creates them). Use when the student starts M4 for the first time, says "啟動 M4 前置" / "M4 prerequisites" / "check M4 setup", or when `m4-ai-autofill-barber` / `-checklist` detects a missing OpenAI env var, no photos, or no pgvector.
+description: One-time setup before Milestone 4 (the egg unit「AI 自動填寫賣家商鋪資訊」) of the barber-booking course — an INTERACTIVE, agent-driven walkthrough with TWO parts. (A) The only NEW runtime wiring: the student has already stored their OpenAI API key in AWS Secrets Manager as `openai-api-key` (us-east-1, done from the student step sheet before this skill runs); the agent verifies it exists and is an `sk-…` secret, then copies it into Vercel env as `OPENAI_API_KEY` (Sensitive, Production, server-only, NEVER `VITE_`-prefixed) and adds `OPENAI_MODEL` (a vision-capable chat model) via the Vercel MCP — never printing the value. (B) A data-readiness carryover check of exactly what M4 consumes: at least one barber with portfolio photos in `barber_photos` (the shop picks which ones the AI reads with a per-photo「AI」checkbox at press time), the public `barber-photos` Storage bucket (thumbnails and public pages read photos from it; the function downloads them server-side and sends them to OpenAI inline), the M1.1 RLS that lets a shop update its own `barbers.intro` + `barber_photos.caption` (the "套用" write path), `SUPABASE_SECRET_KEY` already in Vercel env from M2.1, the `pgvector` extension available, and a clean slate (no `style_refs` table / `match_style_refs` function yet — M4 creates them). Use when the student starts M4 for the first time, says "啟動 M4 前置" / "M4 prerequisites" / "check M4 setup", or when `m4-ai-autofill-barber` / `-checklist` detects a missing OpenAI env var, no photos, or no pgvector.
 ---
 
 # M4 Prerequisites — interactive setup + carryover check (the agent drives)
@@ -15,12 +15,12 @@ description: One-time setup before Milestone 4 (the egg unit「AI 自動填寫�
 
 ## Architecture (what this check unlocks)
 
-M4 adds an **AI draft** to the shop side. On `/shop`, a shop presses「AI 自動填寫」on one barber → the Vercel function `/api/ai/autofill` (server-only, holds `OPENAI_API_KEY` + `SUPABASE_SECRET_KEY`) reads that barber's **featured portfolio photos** from the public `barber-photos` bucket → **GPT describes each hairstyle** → the descriptions are turned into **vectors** (OpenAI `text-embedding-3-small`, 1536 dims) → **`match_style_refs`** finds the closest entries in a **hairstyle knowledge base** (`style_refs`, a pgvector table in the same Supabase DB) → **GPT writes** the barber's intro + a caption per photo using the matched hairstyle names → the function returns a **draft**. The shop edits it and presses「套用」, which writes `barbers.intro` + `barber_photos.caption` through the **existing M1.1 RLS**. That's the full RAG loop: **vectorize → similarity search → generate with the retrieved context**.
+M4 adds an **AI draft** to the shop side. On `/shop`, a shop presses「AI 自動填寫」on one barber → the Vercel function `/api/ai/autofill` (server-only, holds `OPENAI_API_KEY` + `SUPABASE_SECRET_KEY`) reads the portfolio photos the shop **ticked for AI** (a per-photo「AI」checkbox, no count limit) from the `barber-photos` bucket → **GPT describes each hairstyle** → the descriptions are turned into **vectors** (OpenAI `text-embedding-3-small`, 1536 dims) → **`match_style_refs`** finds the closest entries in a **hairstyle knowledge base** (`style_refs`, a pgvector table in the same Supabase DB) → **GPT writes** the barber's intro + a caption per photo using the matched hairstyle names → the function returns a **draft**. The shop edits it and presses「套用」, which writes `barbers.intro` + `barber_photos.caption` through the **existing M1.1 RLS**. That's the full RAG loop: **vectorize → similarity search → generate with the retrieved context**.
 
 What this prereq confirms is exactly what that flow consumes:
 - **`OPENAI_API_KEY` + `OPENAI_MODEL` in Vercel env** (Part A) → the function can call OpenAI.
 - **`SUPABASE_SECRET_KEY` in Vercel env** (from M2.1) → the function reads photos and writes the knowledge-base vectors past RLS.
-- **Photos to look at** (`barber_photos` rows, ideally `is_featured`) + **the public bucket** → the draft dialog and public pages can show each photo; the function itself downloads the photos server-side and sends them to OpenAI inline.
+- **Photos to look at** (`barber_photos` rows; the shop ticks which ones at press time) + **the public bucket** → the draft dialog and public pages can show each photo; the function itself downloads the photos server-side and sends them to OpenAI inline.
 - **The M1.1 write policies** on `barbers` + `barber_photos` → the「套用」button can save the draft as the shop.
 - **`pgvector` available** + **a clean slate** → M4's migration can create `style_refs` + `match_style_refs`.
 
@@ -30,7 +30,7 @@ What this prereq confirms is exactly what that flow consumes:
 - `[[m4-ai-autofill-barber]]` (or its checklist) detects a missing `OPENAI_API_KEY`, no photos, or no `vector` extension.
 
 **Opening line to the student (say something like):**
-> 「M4 要做的是『AI 自動填寫』：店家按一個按鈕，AI 看這位理髮師的精選作品照，參考平台的髮型範本資料庫（這就是 RAG 向量資料庫），幫他寫好自我介紹和每張照片的說明，店家確認後才存檔。開始之前只有一件新的事：你已經把 **OpenAI API 金鑰**存進 AWS Secrets Manager 了，我會確認它在、然後幫你放進 Vercel 的環境變數。其他東西我也一起檢查現在的狀態。」
+> 「M4 要做的是『AI 自動填寫』：店家按一個按鈕，AI 看你勾選的作品照，參考平台的髮型範本資料庫（這就是 RAG 向量資料庫），幫他寫好自我介紹和每張照片的說明，店家確認後才存檔。開始之前只有一件新的事：你已經把 **OpenAI API 金鑰**存進 AWS Secrets Manager 了，我會確認它在、然後幫你放進 Vercel 的環境變數。其他東西我也一起檢查現在的狀態。」
 
 ---
 
@@ -95,8 +95,8 @@ group by b.id
 order by photos desc;
 ```
 - **At least one barber with `photos >= 1`** → ✅ there's something for the AI to look at. Note that barber (you'll test with them).
-- **`featured = 0`** for that barber → not a blocker (the function falls back to the newest photos), but tell the student the AI works best when they **mark 2–6 best photos as 精選** on `/shop`.
-- **No photos anywhere** → have the student upload **3–6 real hairstyle photos** for one barber on `/shop` (M1.1's uploader) and mark a few as featured, then re-run B1. Without photos the「AI 自動填寫」button stays disabled.
+- `featured` is informational only. 精選 / Featured still just orders the public carousel; the AI reads the photos the student ticks with the「AI」checkbox in each photo's top-right corner (or「全部選取」) right before pressing the button, with no count limit.
+- **No photos anywhere** → have the student upload **3–6 real hairstyle photos** for one barber on `/shop` (M1.1's uploader) then re-run B1. Without photos the「AI 自動填寫」button stays disabled.
 
 > **Note for Claude Code:** good test photos are clear shots of a haircut (side/back views, a fade, a perm, a beard). Random non-hair images will still produce a draft, but the retrieval demo (A3 in the checklist) is much more convincing with real hairstyles.
 
@@ -160,7 +160,7 @@ select to_regclass('public.style_refs')      as style_refs,
 ## Verify (all must pass)
 
 - ✅ **OpenAI wired** — `openai-api-key` exists in AWS Secrets Manager and is an `sk-…` secret; `OPENAI_API_KEY` (Sensitive) + `OPENAI_MODEL` exist in Vercel env; no `VITE_OPENAI…` variable; `SUPABASE_SECRET_KEY` is still there (Part A).
-- ✅ **Photos to look at** — at least one barber has ≥ 1 photo (ideally 2–6 featured) (B1).
+- ✅ **Photos to look at** — at least one barber has ≥ 1 photo (B1).
 - ✅ **Public bucket** — `barber-photos` is public (B2).
 - ✅ **Write path** — M1.1's shop UPDATE policies on `barbers` + `barber_photos` exist, and `intro` / `caption` / `is_featured` / `storage_path` columns are there (B3).
 - ✅ **pgvector available + clean slate** — `vector` is in `pg_available_extensions`; `style_refs` / `match_style_refs` don't exist yet (B4, B5).
@@ -168,7 +168,7 @@ select to_regclass('public.style_refs')      as style_refs,
 ## Next step
 
 When all five are ✅, tell the student:
-「前置檢查通過 ✅ —— OpenAI 金鑰在 AWS Secrets Manager，也已經放進 Vercel（只在伺服器端讀得到）；`<理髮師名稱>` 有 N 張作品照（其中 M 張精選）可以給 AI 看；照片 bucket 是公開的，頁面上看得到照片；店家本來就能改自己理髮師的介紹和照片說明，所以『套用』不用新增權限；Supabase 也可以啟用 pgvector。接下來我會：建一張**髮型範本知識庫**（pgvector 向量表）並放進 24 種常見髮型、寫一支伺服器端的 `/api/ai/autofill`（看圖 → 轉向量 → 找相似範本 → 寫草稿），再在 `/shop` 加上『AI 自動填寫』按鈕和草稿對話框。跟我說『啟動 M4』就開始。」
+「前置檢查通過 ✅ —— OpenAI 金鑰在 AWS Secrets Manager，也已經放進 Vercel（只在伺服器端讀得到）；`<理髮師名稱>` 有 N 張作品照，按按鈕前勾選照片右上角的「AI」就能決定要讓 AI 看哪幾張；照片 bucket 是公開的，頁面上看得到照片；店家本來就能改自己理髮師的介紹和照片說明，所以『套用』不用新增權限；Supabase 也可以啟用 pgvector。接下來我會：建一張**髮型範本知識庫**（pgvector 向量表）並放進 24 種常見髮型、寫一支伺服器端的 `/api/ai/autofill`（看圖 → 轉向量 → 找相似範本 → 寫草稿），再在 `/shop` 加上『AI 自動填寫』按鈕和草稿對話框。跟我說『啟動 M4』就開始。」
 Then return to the build skill `[[m4-ai-autofill-barber]]` (Step 0/1).
 
 ## Reference
