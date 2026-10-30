@@ -413,33 +413,6 @@ export type Database = {
           },
         ]
       }
-      style_refs: {
-        Row: {
-          category: string
-          created_at: string
-          description: string
-          embedding: string | null
-          id: string
-          name: string
-        }
-        Insert: {
-          category: string
-          created_at?: string
-          description: string
-          embedding?: string | null
-          id?: string
-          name: string
-        }
-        Update: {
-          category?: string
-          created_at?: string
-          description?: string
-          embedding?: string | null
-          id?: string
-          name?: string
-        }
-        Relationships: []
-      }
     }
     Views: {
       barbers_public: {
@@ -565,16 +538,6 @@ export type Database = {
       mark_payout_transferred: {
         Args: { p_bank_reference?: string; p_payout_id: string }
         Returns: undefined
-      }
-      match_style_refs: {
-        Args: { match_count?: number; query_embedding: string }
-        Returns: {
-          category: string
-          description: string
-          id: string
-          name: string
-          similarity: number
-        }[]
       }
     }
     Enums: {
